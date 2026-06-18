@@ -1,5 +1,5 @@
 <template>
-  <div style="display:flex;flex-direction:column;height:calc(100vh - 64px);background:#f9fbfc">
+  <div style="display:flex;flex-direction:column;height:calc(100vh - 64px);background:var(--el-bg-color-page)">
     <!-- Top Toolbar -->
     <div class="ww-toolbar" style="background:var(--el-bg-color);padding:16px 28px;border-bottom:1px solid var(--el-border-color-light);display:flex;gap:12px;align-items:center;flex-wrap:wrap">
       <!-- Week/Month toggle -->
@@ -54,11 +54,13 @@
         <el-icon style="margin-right:4px"><Plus /></el-icon>新建
       </el-button>
       <el-button size="large" @click="showProjectDialog = true" style="border-radius:8px">管理项目</el-button>
+      <el-button size="large" @click="handleExport" style="border-radius:8px;font-weight:700">
+        <el-icon style="margin-right:4px"><Download /></el-icon>导出
+      </el-button>
     </div>
 
     <!-- Weekday filter bar (week view only) -->
     <div v-if="viewMode === 'week'" class="ww-weekday-bar" style="background:var(--el-bg-color);padding:10px 28px;border-bottom:1px solid var(--el-border-color-light);display:flex;gap:6px;align-items:center">
-      <span style="font-size:12px;color:var(--el-text-color-secondary);margin-right:4px;white-space:nowrap">日期筛选</span>
       <button
         v-for="d in [{value:'',label:'全部'}, ...weekdayOptions]"
         :key="d.value"
@@ -90,7 +92,7 @@
             <!-- Status columns for this project -->
             <div style="display:flex;gap:12px">
               <div v-for="col in statusCols" :key="col.key"
-                :style="{flex:1,background:col.bg,borderRadius:'12px',padding:'12px',minHeight:'80px',border:'1px solid #e4e7ed'}"
+                :style="{flex:1,background:col.bg,borderRadius:'12px',padding:'12px',minHeight:'80px',border:'1px solid var(--el-border-color-light)'}"
                 @dragover.prevent @drop="onDrop($event, col.key, group)">
                 <div style="font-size:12px;font-weight:600;color:var(--el-text-color-secondary);margin-bottom:8px;text-align:center">{{ col.label }}</div>
                 <div v-for="(item, idx) in group.items.filter(i => i.status === col.key)" :key="item.id"
@@ -99,22 +101,22 @@
                   @dragover="onDragOver($event, idx)"
                   @dragend="onDragEnd"
                   @click="openEdit(item)"
-                  style="background:var(--el-bg-color);border-radius:10px;padding:12px;margin-bottom:8px;cursor:grab;box-shadow:0 1px 3px rgba(0,0,0,0.06);transition:all 0.2s;border-left:3px solid"
-                  :style="{borderLeftColor: isOverdue(item) ? '#f56c6c' : priorityColor(item.priority), background: isOverdue(item) ? '#fff5f5' : 'var(--el-bg-color)'}">
+                  style="background:var(--el-bg-color);border-radius:10px;padding:12px;margin-bottom:8px;cursor:grab;box-shadow:var(--el-box-shadow-light);transition:all 0.2s;border-left:3px solid"
+                  :style="{borderLeftColor: isOverdue(item) ? '#f56c6c' : priorityColor(item.priority), background: isOverdue(item) ? 'var(--el-color-danger-light-9)' : 'var(--el-bg-color)'}">
                   <!-- Type badge -->
                   <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
                     <span :style="{fontSize:'10px',padding:'0 6px',borderRadius:'4px',fontWeight:600,
-                      background:item.type==='work_order'?'#fef0f0':'#eef4ff',
-                      color:item.type==='work_order'?'#f56c6c':'#6366f1'}">
+                      background:item.type==='work_order'?'var(--el-color-danger-light-9)':'var(--el-color-primary-light-9)',
+                      color:item.type==='work_order'?'var(--el-color-danger)':'var(--el-color-primary)'}">
                       {{ item.type === 'work_order' ? '🔧 工单' : '📋 任务' }}
                     </span>
                     <span :style="{fontSize:'11px',padding:'0 6px',borderRadius:'4px',fontWeight:600,background:priorityBg(item.priority),color:priorityColor(item.priority),border:`1px solid ${priorityColor(item.priority)}`}">{{ priorityMap[item.priority] }}</span>
-                    <span v-if="isOverdue(item)" style="font-size:10px;padding:0 6px;borderRadius:'4px';fontWeight:600;background:#fef0f0;color:#f56c6c;border:1px solid #f56c6c">⏰ 已超期</span>
+                    <span v-if="isOverdue(item)" style="font-size:10px;padding:0 6px;borderRadius:'4px';fontWeight:600;background:var(--el-color-danger-light-9);color:var(--el-color-danger);border:1px solid var(--el-color-danger)">⏰ 已超期</span>
                   </div>
                   <div style="font-size:13px;font-weight:600;color:var(--el-text-color-primary);margin-bottom:4px;line-height:1.4">{{ item.title }}</div>
                   <!-- Tags row -->
                   <div v-if="(item.tags||[]).length" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">
-                    <span v-for="t in (item.tags||[])" :key="t" style="background:#eef4ff;color:#6169ee;font-size:11px;padding:1px 8px;border-radius:6px;font-weight:500">#{{ t }}</span>
+                    <span v-for="t in (item.tags||[])" :key="t" style="background:var(--el-color-primary-light-9);color:var(--el-color-primary);font-size:11px;padding:1px 8px;border-radius:6px;font-weight:500">#{{ t }}</span>
                   </div>
                   <!-- Hours bar -->
                   <div v-if="item.estimated_hours" style="margin-top:4px">
@@ -135,7 +137,7 @@
                     </span>
                   </div>
                 </div>
-                <div v-if="group.items.filter(i => i.status === col.key).length===0" style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#c0c4cc;font-size:13px;padding:20px 16px;gap:6px">
+                <div v-if="group.items.filter(i => i.status === col.key).length===0" style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--el-text-color-placeholder);font-size:13px;padding:20px 16px;gap:6px">
                   <span style="font-size:28px;opacity:0.5">{{ col.emptyIcon }}</span>
                   <span>暂无任务</span>
                   <span style="font-size:11px;opacity:0.7">拖拽或新建添加</span>
@@ -173,7 +175,7 @@
           <template #header>
             <div style="display:flex;align-items:center;gap:10px">
               <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center">
-                <span style="font-size:18px">🎯</span>
+                <el-icon color="#fff" size="20"><Aim /></el-icon>
               </div>
               <span style="font-size:17px;font-weight:700;color:var(--el-text-color-primary)">设置饱和度目标</span>
             </div>
@@ -202,16 +204,16 @@
         <el-row :gutter="10" style="margin-bottom:14px">
           <el-col :span="12">
             <el-card shadow="hover" :body-style="{ padding:'16px', textAlign:'center' }"
-              style="background:linear-gradient(135deg,#eef4ff,#e0e7ff);border:none;border-radius:12px">
-              <div style="font-size:24px;font-weight:800;color:#6366f1">{{ currentStats?.task_hours || 0 }}h</div>
-              <div style="font-size:12px;color:#6366f1;margin-top:2px;font-weight:600">📋 任务工时</div>
+              style="background:var(--el-color-primary-light-9);border:none;border-radius:12px">
+              <div style="font-size:24px;font-weight:800;color:var(--el-color-primary)">{{ currentStats?.task_hours || 0 }}h</div>
+              <div style="font-size:12px;color:var(--el-color-primary);margin-top:2px;font-weight:600">📋 任务工时</div>
             </el-card>
           </el-col>
           <el-col :span="12">
             <el-card shadow="hover" :body-style="{ padding:'16px', textAlign:'center' }"
-              style="background:linear-gradient(135deg,#fef0f0,#fde8e8);border:none;border-radius:12px">
-              <div style="font-size:24px;font-weight:800;color:#f56c6c">{{ currentStats?.work_order_hours || 0 }}h</div>
-              <div style="font-size:12px;color:#f56c6c;margin-top:2px;font-weight:600">🔧 工单工时</div>
+              style="background:var(--el-color-danger-light-9);border:none;border-radius:12px">
+              <div style="font-size:24px;font-weight:800;color:var(--el-color-danger)">{{ currentStats?.work_order_hours || 0 }}h</div>
+              <div style="font-size:12px;color:var(--el-color-danger);margin-top:2px;font-weight:600">🔧 工单工时</div>
             </el-card>
           </el-col>
         </el-row>
@@ -227,7 +229,7 @@
           <template #header>
             <div style="display:flex;align-items:center;justify-content:space-between">
               <span style="font-weight:700;font-size:13px">每日工时分布（周一~周日）</span>
-              <span style="font-size:12px;color:var(--el-text-color-secondary)">总计 <b style="color:#6366f1">{{ dailyHours.reduce((a,b) => a + b, 0) }}h</b></span>
+              <span style="font-size:12px;color:var(--el-text-color-secondary)">总计 <b style="color:var(--el-color-primary)">{{ dailyHours.reduce((a,b) => a + b, 0) }}h</b></span>
             </div>
           </template>
           <v-chart :option="dailyBarOption" style="height:200px" autoresize />
@@ -365,9 +367,9 @@
               @dragover.prevent="onMsDragOver($event, m)"
               @drop="onMsDrop($event, m, idx)"
               @dragend="onMsDragEnd"
-              :style="{background: m.is_completed ? '#f6ffed' : 'var(--el-bg-color)',borderRadius:'6px',padding:'12px 12px 12px 8px',border:`1px solid ${m.is_completed ? '#b7eb8f' : 'var(--el-border-color-light)'}`,transition:'all 0.2s',display:'flex',gap:'6px',alignItems:'flex-start',opacity: msDragId === m.id ? 0.5 : 1}">
+              :style="{background: m.is_completed ? 'var(--el-color-success-light-9)' : 'var(--el-bg-color)',borderRadius:'6px',padding:'12px 12px 12px 8px',border:`1px solid ${m.is_completed ? 'var(--el-color-success-light-5)' : 'var(--el-border-color-light)'}`,transition:'all 0.2s',display:'flex',gap:'6px',alignItems:'flex-start',opacity: msDragId === m.id ? 0.5 : 1}">
               <!-- Drag handle -->
-              <div style="cursor:grab;color:#c0c4cc;padding-top:2px;user-select:none" title="拖拽排序">☰</div>
+              <div style="cursor:grab;color:var(--el-text-color-placeholder);padding-top:2px;user-select:none" title="拖拽排序">☰</div>
               <!-- Checkbox -->
               <el-checkbox :model-value="m.is_completed" @change="toggleMilestone(m)" :disabled="m.is_locked" style="padding-top:2px"/>
               <!-- Content -->
@@ -383,7 +385,7 @@
               <!-- Actions (horizontal) -->
               <div style="display:flex;align-items:center;gap:0;flex-shrink:0">
                 <template v-if="m.is_locked">
-                  <span style="font-size:11px;color:#c0c4cc;padding:4px" title="系统生成，不可编辑">🔒</span>
+                  <span style="font-size:11px;color:var(--el-text-color-placeholder);padding:4px" title="系统生成，不可编辑">🔒</span>
                 </template>
                 <template v-else>
                   <el-button size="small" text @click="openMilestoneDialog(m)"><el-icon><EditPen/></el-icon></el-button>
@@ -492,10 +494,13 @@ import { getWeeklyStats, getTrendStats, getMonthlyStats, type WeeklyStats, type 
 import { getWeeklyTarget, setWeeklyTarget } from '@/api/weekly-targets'
 import { fetchMilestones, createMilestone, updateMilestone, deleteMilestone, reorderMilestones, type Milestone } from '@/api/milestones'
 import { PRIORITY_OPTIONS, STATUS_OPTIONS, PRIORITY_MAP } from '@/types'
+import { exportWorkWeekly } from '@/utils/export'
+import { useChartTheme } from '@/composables/useChartTheme'
 
 use([BarChart, PieChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent, CanvasRenderer])
 
 const projectStore = useProjectStore()
+const chart = useChartTheme()
 const store = useWorkItemStore()
 
 const priorityOptions = PRIORITY_OPTIONS
@@ -505,9 +510,9 @@ const priorityColor = (p: string) => p === 'high' ? '#f56c6c' : p === 'medium' ?
 const priorityBg = (p: string) => p === 'high' ? '#fef0f0' : p === 'medium' ? '#fdf6ec' : '#eefbe6'
 
 const statusCols = [
-  { key: 'todo', label: '待处理', bg: 'rgba(238,242,255,0.6)', emptyIcon: '📥' },
-  { key: 'in_progress', label: '进行中', bg: 'rgba(255,251,235,0.6)', emptyIcon: '⚡' },
-  { key: 'done', label: '已完成', bg: 'rgba(236,253,245,0.6)', emptyIcon: '🎉' },
+  { key: 'todo', label: '待处理', bg: 'var(--el-color-primary-light-9)', emptyIcon: '📥' },
+  { key: 'in_progress', label: '进行中', bg: 'var(--el-color-warning-light-9)', emptyIcon: '⚡' },
+  { key: 'done', label: '已完成', bg: 'var(--el-color-success-light-9)', emptyIcon: '🎉' },
 ]
 
 // ── Week/Month state ──
@@ -1130,6 +1135,29 @@ async function fetchStats() {
 async function fetchTrend() { trendData.value = await getTrendStats(12) }
 function refreshStats() { fetchStats() }
 
+// ── Export ──
+function handleExport() {
+  const itemHoursMap = new Map<number, number>()
+  for (const item of store.items) {
+    itemHoursMap.set(item.id, store.getTotalHours(item.id))
+  }
+
+  const projectNameMap = new Map<number, string>()
+  for (const p of projectStore.projects) {
+    projectNameMap.set(p.id, p.name)
+  }
+
+  exportWorkWeekly({
+    periodLabel: periodLabel.value,
+    viewMode: viewMode.value,
+    items: filteredItems.value,
+    projectNameMap,
+    itemHoursMap,
+    currentStats: currentStats.value,
+    trendData: trendData.value,
+  })
+}
+
 // ── Custom target ──
 const targetDialogVisible = ref(false)
 const targetFormHours = ref(40)
@@ -1197,10 +1225,10 @@ const saturationOption = computed(() => {
       center: ['50%', '50%'],
       silent: true,
       labelLine: { show: false },
-      label: { show: true, position: 'center', formatter: `{p|${pct}%}\n{r|饱和度}`, rich: { p: { fontSize: 28, fontWeight: 800, color: 'var(--el-text-color-primary)' }, r: { fontSize: 12, color: 'var(--el-text-color-secondary)', lineHeight: 22 } } },
+      label: { show: true, position: 'center', formatter: `{p|${pct}%}\n{r|饱和度}`, rich: { p: { fontSize: 28, fontWeight: 800, color: chart.textPrimary.value }, r: { fontSize: 12, color: chart.textSecondary.value, lineHeight: 22 } } },
       data: [
-        { value: pct, name: '已用', itemStyle: { color, borderRadius: 6, borderColor: '#fff', borderWidth: 2 } },
-        { value: Math.max(0, 100 - pct), name: '剩余', itemStyle: { color: 'var(--el-fill-color-light)', borderRadius: 6, borderColor: '#fff', borderWidth: 2 } },
+        { value: pct, name: '已用', itemStyle: { color, borderRadius: 6, borderColor: chart.bgColor.value, borderWidth: 2 } },
+        { value: Math.max(0, 100 - pct), name: '剩余', itemStyle: { color: chart.fillLight.value, borderRadius: 6, borderColor: chart.bgColor.value, borderWidth: 2 } },
       ],
     }],
   }
@@ -1211,13 +1239,13 @@ const projectBarOption = computed(() => {
   return {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: { left: '3%', right: '12%', bottom: '3%', top: '5%', containLabel: true },
-    xAxis: { type: 'value', axisLabel: { fontSize: 11, color: '#909399' }, splitLine: { lineStyle: { color: 'var(--el-border-color-lighter)' } } },
-    yAxis: { type: 'category', data: data.map(d => d.project_name).reverse(), axisLabel: { fontSize: 12, fontWeight: 600, color: 'var(--el-text-color-regular)' }, axisLine: { show: false }, axisTick: { show: false } },
+    xAxis: { type: 'value', axisLabel: { fontSize: 11, color: chart.textSecondary.value }, splitLine: { lineStyle: { color: chart.borderLighter.value } } },
+    yAxis: { type: 'category', data: data.map(d => d.project_name).reverse(), axisLabel: { fontSize: 12, fontWeight: 600, color: chart.textRegular.value }, axisLine: { show: false }, axisTick: { show: false } },
     series: [{
       type: 'bar',
       data: data.map(d => ({ value: d.hours, itemStyle: { color: d.project_color, borderRadius: [0, 6, 6, 0] } })).reverse(),
       barWidth: 16,
-      label: { show: true, position: 'right', fontSize: 12, fontWeight: 600, color: 'var(--el-text-color-regular)', formatter: '{c}h' },
+      label: { show: true, position: 'right', fontSize: 12, fontWeight: 600, color: chart.textRegular.value, formatter: '{c}h' },
     }],
   }
 })
@@ -1228,13 +1256,13 @@ const WEEKDAY_COLORS = ['#6366f1', '#06b6d4', '#67c23a', '#e6a23c', '#f56c6c', '
 const dailyBarOption = computed(() => ({
   tooltip: { trigger: 'axis', formatter: (p: any) => `${p[0].name}: ${p[0].value}h` },
   grid: { left: '3%', right: '8%', bottom: '3%', top: '8%', containLabel: true },
-  xAxis: { type: 'category', data: WEEKDAY_LABELS, axisLabel: { color: '#909399', fontSize: 11 } },
-  yAxis: { type: 'value', axisLabel: { color: '#909399', formatter: '{value}h' }, splitLine: { lineStyle: { type: 'dashed', color: '#e4e7ed' } } },
+  xAxis: { type: 'category', data: WEEKDAY_LABELS, axisLabel: { color: chart.textSecondary.value, fontSize: 11 } },
+  yAxis: { type: 'value', axisLabel: { color: chart.textSecondary.value, formatter: '{value}h' }, splitLine: { lineStyle: { type: 'dashed', color: chart.borderLight.value } } },
   series: [{
     type: 'bar',
     data: dailyHours.value.map((h, i) => ({ value: h, itemStyle: { color: WEEKDAY_COLORS[i], borderRadius: [6, 6, 0, 0] } })),
     barWidth: 28,
-    label: { show: true, position: 'top', fontSize: 11, fontWeight: 600, color: '#606266', formatter: (p: any) => p.value > 0 ? p.value + 'h' : '' },
+    label: { show: true, position: 'top', fontSize: 11, fontWeight: 600, color: chart.textRegular.value, formatter: (p: any) => p.value > 0 ? p.value + 'h' : '' },
   }],
 }))
 
@@ -1244,9 +1272,9 @@ const trendOption = computed(() => ({
   xAxis: {
     type: 'category',
     data: trendData.value.map(d => d.week_start.slice(5)),
-    axisLabel: { fontSize: 11, color: '#909399', rotate: 45 },
+    axisLabel: { fontSize: 11, color: chart.textSecondary.value, rotate: 45 },
   },
-  yAxis: { type: 'value', min: 0, axisLabel: { fontSize: 11, color: '#909399' }, splitLine: { lineStyle: { color: 'var(--el-border-color-lighter)' } } },
+  yAxis: { type: 'value', min: 0, axisLabel: { fontSize: 11, color: chart.textSecondary.value }, splitLine: { lineStyle: { color: chart.borderLighter.value } } },
   series: [{
     type: 'line',
     data: trendData.value.map(d => d.total_hours),
@@ -1292,23 +1320,23 @@ onMounted(async () => {
   border-radius: 8px;
 }
 .ms-add-btn {
-  background: rgba(99,102,241,0.08) !important;
-  color: #6366f1 !important;
+  background: var(--el-color-primary-light-9) !important;
+  color: var(--el-color-primary) !important;
   border: none !important;
   border-radius: 6px !important;
 }
 .ms-add-btn:hover {
-  background: linear-gradient(135deg,#6366f1,#8b5cf6) !important;
+  background: var(--el-color-primary) !important;
   color: #fff !important;
 }
 .ms-clear-btn {
-  background: rgba(245,108,108,0.08) !important;
-  color: #f56c6c !important;
+  background: var(--el-color-danger-light-9) !important;
+  color: var(--el-color-danger) !important;
   border: none !important;
   border-radius: 6px !important;
 }
 .ms-clear-btn:hover {
-  background: linear-gradient(135deg,#f56c6c,#e04040) !important;
+  background: var(--el-color-danger) !important;
   color: #fff !important;
 }
 
@@ -1327,11 +1355,11 @@ onMounted(async () => {
   white-space: nowrap;
 }
 .ww-wd-btn:hover {
-  color: #6366f1;
-  border-color: #a5b4fc;
-  background: rgba(99, 102, 241, 0.06);
+  color: var(--el-color-primary);
+  border-color: var(--el-color-primary-light-3);
+  background: var(--el-color-primary-light-9);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.12);
+  box-shadow: 0 2px 8px var(--el-color-primary-light-3);
 }
 .ww-wd-btn--active {
   background: linear-gradient(135deg, #6366f1, #8b5cf6);

@@ -3,7 +3,7 @@
     <el-card style="width:420px;border-radius:16px" :body-style="{ padding: '40px' }">
       <div style="text-align:center;margin-bottom:24px">
         <h2>创建账号</h2>
-        <p style="color:#909399;font-size:14px">开始管理你的任务</p>
+        <p style="color:var(--el-text-color-secondary);font-size:14px">开始管理你的任务</p>
       </div>
       <el-form @submit.prevent="handleSubmit" :model="form">
         <el-form-item label="邮箱" :error="errors.email">

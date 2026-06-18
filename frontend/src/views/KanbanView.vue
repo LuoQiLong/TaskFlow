@@ -1,5 +1,5 @@
 <template>
-  <div style="display:flex;flex-direction:column;height:calc(100vh - 64px);background:#f9fbfc">
+  <div style="display:flex;flex-direction:column;height:calc(100vh - 64px);background:var(--el-bg-color-page)">
     <!-- Toolbar -->
     <div class="search-toolbar" style="background:var(--el-bg-color);padding:20px 28px;border-bottom:1px solid var(--el-border-color-light);display:flex;gap:12px;align-items:center;flex-wrap:wrap">
       <el-input v-model="searchText" placeholder="搜索任务..." :prefix-icon="Search" clearable style="width:500px" size="large" @clear="searchText=''" @input="onSearch"/>
@@ -9,8 +9,10 @@
       <el-select v-model="filters.status" placeholder="状态" clearable style="width:110px" size="large" @change="onFilterChange('status', $event)">
         <el-option v-for="o in statusOptions" :key="o.value" :label="o.label" :value="o.value"/>
       </el-select>
-      <el-select v-model="filters.priority" placeholder="优先级" clearable style="width:110px" size="large" @change="onFilterChange('priority', $event)">
-        <el-option v-for="o in priorityOptions" :key="o.value" :label="o.label" :value="o.value"/>
+      <el-select v-model="filters.priority" placeholder="优先级" clearable style="width:130px" size="large" @change="onFilterChange('priority', $event)">
+        <el-option label="🔴 高" value="high"/>
+        <el-option label="🟡 中" value="medium"/>
+        <el-option label="🟢 低" value="low"/>
       </el-select>
       <div style="width:500px;flex-shrink:0"><el-date-picker v-model="dateRange" type="daterange" range-separator="至" start-placeholder="开始" end-placeholder="结束" format="YYYY-MM-DD" value-format="YYYY-MM-DD" size="large" style="width:100%" @change="onDateChange"/></div>
       <el-select v-model="sortBy" placeholder="排序" size="large" style="width:140px" @change="onSortChange">
@@ -33,9 +35,9 @@
       <!-- Kanban columns -->
       <div style="flex:1;display:flex;gap:20px;padding:20px 28px;overflow-x:auto;min-height:0" v-loading="store.isLoading">
         <div v-for="col in columns" :key="col.key"
-          :style="{ flex: 1, minWidth: '260px', maxWidth: '380px', background: col.bg, borderRadius: '18px', display: 'flex', flexDirection: 'column', border: '1px solid #e4e7ed' }"
+          :style="{ flex: 1, minWidth: '260px', maxWidth: '380px', background: col.bg, borderRadius: '18px', display: 'flex', flexDirection: 'column', border: '1px solid var(--el-border-color-light)' }"
           @dragover.prevent @drop="onDrop($event, col.key)">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px;background:rgba(255,255,255,0.6)">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px;background:var(--el-fill-color-light)">
             <div style="display:flex;align-items:center;gap:8px">
               <span :style="{ width:'10px',height:'10px',borderRadius:'50%',background:col.dotColor,boxShadow:`0 0 0 3px ${col.dotColor}20` }"/>
               <span style="font-size:14px;font-weight:700;color:var(--el-text-color-primary)">{{ col.label }}</span>
@@ -52,7 +54,7 @@
               @dragstart="onDragStart($event, task, idx, col.key)"
               @dragover="onDragOver($event, idx)"
               @dragend="onDragEnd"
-              style="background:var(--el-bg-color);border-radius:14px;padding:16px;cursor:grab;box-shadow:0 1px 4px rgba(0,0,0,0.06);transition:all 0.2s;border-left:4px solid"
+              style="background:var(--el-bg-color);border-radius:14px;padding:16px;cursor:grab;box-shadow:var(--el-box-shadow-light);transition:all 0.2s;border-left:4px solid"
               :style="{ borderLeftColor: priorityColor(task.priority) }"
               @click="openEdit(task)">
               <!-- Title row with priority on the right -->
@@ -66,7 +68,7 @@
               <div v-if="task.description" style="font-size:12px;color:var(--el-text-color-secondary);margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ task.description }}</div>
               <!-- Tags row -->
               <div v-if="(task.tags||[]).length" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">
-                <span v-for="t in (task.tags||[])" :key="t" style="background:#eef4ff;color:#6169ee;font-size:12px;padding:2px 10px;border-radius:8px;font-weight:500">#{{ t }}</span>
+                <span v-for="t in (task.tags||[])" :key="t" style="background:var(--el-color-primary-light-9);color:var(--el-color-primary);font-size:12px;padding:2px 10px;border-radius:8px;font-weight:500">#{{ t }}</span>
               </div>
               <!-- Meta row -->
               <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
@@ -75,7 +77,7 @@
                 <span v-if="task.assignee" style="font-size:12px;color:var(--el-text-color-secondary);margin-left:auto">👤 {{ task.assignee }}</span>
               </div>
             </div>
-            <div v-if="colTasks(col.key).length===0" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#c0c4cc;font-size:13px;padding:24px">
+            <div v-if="colTasks(col.key).length===0" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--el-text-color-placeholder);font-size:13px;padding:24px">
               <span style="font-size:32px;margin-bottom:8px;opacity:0.5">{{ col.emptyIcon }}</span>
               <span>暂无任务</span>
               <span style="font-size:12px;margin-top:4px">点击 + 添加</span>
@@ -86,7 +88,7 @@
 
       <!-- Right Stats Panel -->
       <div style="width:370px;flex-shrink:0;background:var(--el-bg-color);border-left:1px solid var(--el-border-color-light);overflow-y:auto;padding:20px">
-        <h3 style="font-size:16px;font-weight:700;color:var(--el-text-color-primary);margin-bottom:18px">📊 数据概览</h3>
+        <h3 style="font-size:16px;font-weight:700;color:var(--el-text-color-primary);margin-bottom:18px">数据概览</h3>
         <!-- Stat cards -->
         <el-row :gutter="10" style="margin-bottom:20px">
           <el-col :span="12" v-for="card in statCards" :key="card.key" style="margin-bottom:10px">
@@ -234,7 +236,7 @@
           <template #default="{ row }">
             <div style="display:flex;gap:4px;flex-wrap:wrap">
               <el-tag v-for="t in (row.tags || [])" :key="t" size="small" type="" style="background:#eef4ff;color:#6169ee;border:none;font-weight:500">#{{ t }}</el-tag>
-              <span v-if="!row.tags || !row.tags.length" style="color:#c0c4cc">-</span>
+              <span v-if="!row.tags || !row.tags.length" style="color:var(--el-text-color-placeholder)">-</span>
             </div>
           </template>
         </el-table-column>
@@ -258,7 +260,7 @@
       </el-table>
 
       <!-- Empty state -->
-      <div v-if="!archiveLoading && filteredArchivedTasks.length === 0" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:#c0c4cc">
+      <div v-if="!archiveLoading && filteredArchivedTasks.length === 0" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:var(--el-text-color-placeholder)">
         <span style="font-size:48px;margin-bottom:12px">📭</span>
         <span style="font-size:15px">{{ archiveSearch ? '没有匹配的归档任务' : '暂无归档任务' }}</span>
         <span style="font-size:12px;margin-top:4px">完成看板中的任务后点击 📦 即可归档</span>
@@ -270,6 +272,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { useChartTheme } from '@/composables/useChartTheme'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, EditPen, Plus, Document, PriceTag, Flag, List, User, Calendar, Back, Delete } from '@element-plus/icons-vue'
 import { use } from 'echarts/core'
@@ -289,9 +292,9 @@ const priorityOptions = PRIORITY_OPTIONS
 const priorityMap = PRIORITY_MAP
 
 const columns = [
-  { key: 'todo', label: '待处理', bg: 'linear-gradient(180deg, #eef2ff, #f3e8ff)', dotColor: '#667eea', emptyIcon: '📥' },
-  { key: 'in_progress', label: '进行中', bg: 'linear-gradient(180deg, #fffbeb, #fef3c7)', dotColor: '#e6a23c', emptyIcon: '⚡' },
-  { key: 'done', label: '已完成', bg: 'linear-gradient(180deg, #ecfdf5, #d1fae5)', dotColor: '#67c23a', emptyIcon: '🎉' },
+  { key: 'todo', label: '待处理', bg: 'var(--el-color-primary-light-9)', dotColor: '#667eea', emptyIcon: '📥' },
+  { key: 'in_progress', label: '进行中', bg: 'var(--el-color-warning-light-9)', dotColor: '#e6a23c', emptyIcon: '⚡' },
+  { key: 'done', label: '已完成', bg: 'var(--el-color-success-light-9)', dotColor: '#67c23a', emptyIcon: '🎉' },
 ]
 
 // All unique tags from all tasks
@@ -532,14 +535,15 @@ async function handleDelete() {
 const statCards = computed(() => {
   const tasks = store.tasks
   return [
-    { key: 'total', label: '总任务数', icon: '📋', value: tasks.length, bg: 'linear-gradient(135deg,#eef2ff,#e0e7ff)', iconBg: '#667eea' },
-    { key: 'todo', label: '待处理', icon: '📥', value: tasks.filter(t => t.status === 'todo').length, bg: 'linear-gradient(135deg,#eef2ff,#f3e8ff)', iconBg: '#8b5cf6' },
-    { key: 'prog', label: '进行中', icon: '⚡', value: tasks.filter(t => t.status === 'in_progress').length, bg: 'linear-gradient(135deg,#fffbeb,#fef3c7)', iconBg: '#e6a23c' },
-    { key: 'done', label: '已完成', icon: '✅', value: tasks.filter(t => t.status === 'done').length, bg: 'linear-gradient(135deg,#ecfdf5,#d1fae5)', iconBg: '#67c23a' },
+    { key: 'total', label: '总任务数', icon: '📋', value: tasks.length, bg: 'var(--el-color-primary-light-9)', iconBg: 'var(--el-color-primary)' },
+    { key: 'todo', label: '待处理', icon: '📥', value: tasks.filter(t => t.status === 'todo').length, bg: 'var(--el-color-primary-light-9)', iconBg: 'var(--el-color-primary)' },
+    { key: 'prog', label: '进行中', icon: '⚡', value: tasks.filter(t => t.status === 'in_progress').length, bg: 'var(--el-color-warning-light-9)', iconBg: 'var(--el-color-warning)' },
+    { key: 'done', label: '已完成', icon: '✅', value: tasks.filter(t => t.status === 'done').length, bg: 'var(--el-color-success-light-9)', iconBg: 'var(--el-color-success)' },
   ]
 })
 
 const statusBarOption = computed(() => {
+  const { textPrimary, textRegular, textSecondary } = useChartTheme()
   const tasks = store.tasks
   const counts = {
     todo: tasks.filter(t => t.status === 'todo').length,
@@ -549,8 +553,8 @@ const statusBarOption = computed(() => {
   return {
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '8%', bottom: '3%', top: '18%', containLabel: true },
-    xAxis: { type: 'category', data: ['待处理', '进行中', '已完成'], axisLabel: { fontSize: 11, color: '#606266' }, axisTick: { show: false } },
-    yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 10, color: '#909399' }, splitLine: { lineStyle: { color: 'var(--el-border-color-lighter)' } } },
+    xAxis: { type: 'category', data: ['待处理', '进行中', '已完成'], axisLabel: { fontSize: 11, color: textRegular.value }, axisTick: { show: false } },
+    yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 10, color: textSecondary.value }, splitLine: { lineStyle: { color: 'var(--el-border-color-lighter)' } } },
     series: [{
       type: 'bar',
       data: [
@@ -559,12 +563,13 @@ const statusBarOption = computed(() => {
         { value: counts.done, itemStyle: { color: '#67c23a', borderRadius: [6,6,0,0] } },
       ],
       barWidth: 40,
-      label: { show: true, position: 'top', fontSize: 14, fontWeight: 700, color: '#303133' },
+      label: { show: true, position: 'top', fontSize: 14, fontWeight: 700, color: textPrimary.value },
     }],
   }
 })
 
 const priorityPieOption = computed(() => {
+  const { textRegular, bgColor } = useChartTheme()
   const tasks = store.tasks
   const counts = {
     low: tasks.filter(t => t.priority === 'low').length,
@@ -573,13 +578,13 @@ const priorityPieOption = computed(() => {
   }
   return {
     tooltip: { trigger: 'item', formatter: '{b}: {c} 个 ({d}%)' },
-    legend: { bottom: 0, textStyle: { fontSize: 11, color: '#606266' }, itemWidth: 10, itemHeight: 10 },
+    legend: { bottom: 0, textStyle: { fontSize: 11, color: textRegular.value }, itemWidth: 10, itemHeight: 10 },
     series: [{
       type: 'pie',
       radius: ['50%', '75%'],
       center: ['50%', '45%'],
       avoidLabelOverlap: false,
-      itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 3 },
+      itemStyle: { borderRadius: 6, borderColor: bgColor.value, borderWidth: 3 },
       label: { show: false },
       emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
       data: [

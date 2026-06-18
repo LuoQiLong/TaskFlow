@@ -1,5 +1,5 @@
 <template>
-  <div style="padding:24px;background:#f9fbfc;min-height:100vh" v-loading="loading">
+  <div style="padding:24px;background:var(--el-bg-color-page);min-height:100vh" v-loading="loading">
     <el-tabs v-if="!loading" v-model="activeTab" class="dashboard-tabs">
       <el-tab-pane name="kanban">
         <template #label>
@@ -77,25 +77,25 @@
 
         <!-- Summary cards -->
         <div style="display:flex;gap:16px;margin-bottom:16px">
-          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
+          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:var(--el-color-primary-light-9)">
             <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">总工时</div>
-            <div style="font-size:24px;font-weight:800;color:#6366f1">{{ dashData?.summary?.total_hours ?? 0 }}<span style="font-size:13px">h</span></div>
+            <div style="font-size:24px;font-weight:800;color:var(--el-color-primary)">{{ dashData?.summary?.total_hours ?? 0 }}<span style="font-size:13px">h</span></div>
           </el-card>
-          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:linear-gradient(135deg,#ecfdf5,#d1fae5)">
+          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:var(--el-color-success-light-9)">
             <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">任务工时</div>
-            <div style="font-size:24px;font-weight:800;color:#67c23a">{{ dashData?.summary?.task_hours ?? 0 }}<span style="font-size:13px">h</span></div>
+            <div style="font-size:24px;font-weight:800;color:var(--el-color-success)">{{ dashData?.summary?.task_hours ?? 0 }}<span style="font-size:13px">h</span></div>
           </el-card>
-          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:linear-gradient(135deg,#fef2f2,#fecaca)">
+          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:var(--el-color-danger-light-9)">
             <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">工单工时</div>
-            <div style="font-size:24px;font-weight:800;color:#f56c6c">{{ dashData?.summary?.work_order_hours ?? 0 }}<span style="font-size:13px">h</span></div>
+            <div style="font-size:24px;font-weight:800;color:var(--el-color-danger)">{{ dashData?.summary?.work_order_hours ?? 0 }}<span style="font-size:13px">h</span></div>
           </el-card>
-          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:linear-gradient(135deg,#fffbeb,#fef3c7)">
+          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:var(--el-color-warning-light-9)">
             <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">饱和度</div>
-            <div style="font-size:24px;font-weight:800;color:#e6a23c">{{ dashData?.summary?.saturation_pct ?? 0 }}<span style="font-size:13px">%</span></div>
+            <div style="font-size:24px;font-weight:800;color:var(--el-color-warning)">{{ dashData?.summary?.saturation_pct ?? 0 }}<span style="font-size:13px">%</span></div>
           </el-card>
-          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:linear-gradient(135deg,#fef0f0,#fde0e0)">
+          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:var(--el-color-danger-light-9)">
             <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">超出工时</div>
-            <div style="font-size:24px;font-weight:800;color:#e04040">{{ overtimeHours }}<span style="font-size:13px">h</span></div>
+            <div style="font-size:24px;font-weight:800;color:var(--el-color-danger)">{{ overtimeHours }}<span style="font-size:13px">h</span></div>
           </el-card>
         </div>
 
@@ -167,6 +167,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useChartTheme } from '@/composables/useChartTheme'
 import { use } from 'echarts/core'
 import { BarChart, PieChart, LineChart } from 'echarts/charts'
 import { TitleComponent, TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
@@ -247,20 +248,21 @@ watch(activeTab, (tab) => {
 //  Kanban charts (existing, unchanged)
 // ═══════════════════════════════════════
 
+const chart = useChartTheme()
 const hasKanbanData = computed(() => (overview.value?.total ?? 0) > 0)
 
 const statCards = computed(() => [
-  { key:'total', label:'总任务数', icon:'📋', value: overview.value?.total??0, bg:'linear-gradient(135deg,#eef2ff,#e0e7ff)', iconBg:'#667eea' },
-  { key:'todo', label:'待处理', icon:'📥', value: overview.value?.status_counts?.todo??0, bg:'linear-gradient(135deg,#eef2ff,#f3e8ff)', iconBg:'#8b5cf6' },
-  { key:'prog', label:'进行中', icon:'⚡', value: overview.value?.status_counts?.in_progress??0, bg:'linear-gradient(135deg,#fffbeb,#fef3c7)', iconBg:'#e6a23c' },
-  { key:'done', label:'已完成', icon:'✅', value: overview.value?.status_counts?.done??0, bg:'linear-gradient(135deg,#ecfdf5,#d1fae5)', iconBg:'#67c23a' },
+  { key:'total', label:'总任务数', icon:'📋', value: overview.value?.total??0, bg:'var(--el-color-primary-light-9)', iconBg:'var(--el-color-primary)' },
+  { key:'todo', label:'待处理', icon:'📥', value: overview.value?.status_counts?.todo??0, bg:'var(--el-color-primary-light-9)', iconBg:'var(--el-color-primary)' },
+  { key:'prog', label:'进行中', icon:'⚡', value: overview.value?.status_counts?.in_progress??0, bg:'var(--el-color-warning-light-9)', iconBg:'var(--el-color-warning)' },
+  { key:'done', label:'已完成', icon:'✅', value: overview.value?.status_counts?.done??0, bg:'var(--el-color-success-light-9)', iconBg:'var(--el-color-success)' },
 ])
 
 const statusBarOption = computed(() => ({
   tooltip: { trigger: 'axis' },
   grid: { left: '3%', right: '8%', bottom: '3%', containLabel: true },
-  xAxis: { type: 'category', data: ['待处理', '进行中', '已完成'], axisLabel: { color: '#606266' } },
-  yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#909399' } },
+  xAxis: { type: 'category', data: ['待处理', '进行中', '已完成'], axisLabel: { color: chart.textRegular.value } },
+  yAxis: { type: 'value', minInterval: 1, axisLabel: { color: chart.textSecondary.value } },
   series: [{
     type: 'bar',
     data: [
@@ -269,19 +271,19 @@ const statusBarOption = computed(() => ({
       { value: overview.value?.status_counts?.done ?? 0, itemStyle: { color: '#67c23a', borderRadius: [6,6,0,0] } },
     ],
     barWidth: 50,
-    label: { show: true, position: 'top', fontSize: 14, fontWeight: 700, color: '#303133' },
+    label: { show: true, position: 'top', fontSize: 14, fontWeight: 700, color: chart.textPrimary.value },
   }],
 }))
 
 const priorityPieOption = computed(() => ({
   tooltip: { trigger: 'item', formatter: '{b}: {c} 个 ({d}%)' },
-  legend: { bottom: 0, textStyle: { color: '#606266', fontSize: 12 } },
+  legend: { bottom: 0, textStyle: { color: chart.textRegular.value, fontSize: 12 } },
   series: [{
     type: 'pie',
     radius: ['50%', '75%'],
     center: ['50%', '45%'],
     avoidLabelOverlap: false,
-    itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 3 },
+    itemStyle: { borderRadius: 6, borderColor: chart.bgColor.value, borderWidth: 3 },
     label: { show: false },
     emphasis: { label: { show: true, fontSize: 16, fontWeight: 'bold' } },
     data: [
@@ -298,9 +300,9 @@ const trendLineOption = computed(() => ({
   xAxis: {
     type: 'category',
     data: trend.value.map((d: any) => d.date.slice(5)),
-    axisLabel: { color: '#909399', fontSize: 11, rotate: 45 },
+    axisLabel: { color: chart.textSecondary.value, fontSize: 11, rotate: 45 },
   },
-  yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#909399' } },
+  yAxis: { type: 'value', minInterval: 1, axisLabel: { color: chart.textSecondary.value } },
   series: [{
     type: 'line',
     data: trend.value.map((d: any) => d.count),
@@ -339,13 +341,13 @@ const projectHoursBarOption = computed(() => {
   return {
     tooltip: { trigger: 'axis', formatter: (p: any) => `${p[0].name}: ${p[0].value}h` },
     grid: { left: '3%', right: '12%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'value', axisLabel: { color: '#909399', formatter: '{value}h' } },
-    yAxis: { type: 'category', data: data.map(d => d.project_name).reverse(), axisLabel: { color: '#606266', fontSize: 11 }, inverse: true },
+    xAxis: { type: 'value', axisLabel: { color: chart.textSecondary.value, formatter: '{value}h' } },
+    yAxis: { type: 'category', data: data.map(d => d.project_name).reverse(), axisLabel: { color: chart.textRegular.value, fontSize: 11 }, inverse: true },
     series: [{
       type: 'bar',
       data: data.map(d => ({ value: d.hours, itemStyle: { color: d.project_color, borderRadius: [0, 6, 6, 0] } })).reverse(),
       barWidth: 20,
-      label: { show: true, position: 'right', fontSize: 12, color: '#606266', formatter: '{c}h' },
+      label: { show: true, position: 'right', fontSize: 12, color: chart.textRegular.value, formatter: '{c}h' },
     }],
   }
 })
@@ -359,13 +361,13 @@ const typePieOption = computed(() => {
   ]
   return {
     tooltip: { trigger: 'item', formatter: '{b}: {c}h ({d}%)' },
-    legend: { bottom: 0, textStyle: { color: '#606266', fontSize: 12 } },
+    legend: { bottom: 0, textStyle: { color: chart.textRegular.value, fontSize: 12 } },
     series: [{
       type: 'pie',
       radius: ['55%', '80%'],
       center: ['50%', '45%'],
       avoidLabelOverlap: false,
-      itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 3 },
+      itemStyle: { borderRadius: 6, borderColor: chart.bgColor.value, borderWidth: 3 },
       label: { show: false },
       emphasis: { label: { show: true, fontSize: 16, fontWeight: 'bold' } },
       data,
@@ -379,8 +381,8 @@ const overdueBarOption = computed(() => {
   return {
     tooltip: { trigger: 'axis', formatter: (p: any) => `${p[0].name}: ${p[0].value} 个超期任务` },
     grid: { left: '3%', right: '8%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: data.map(d => d.project_name), axisLabel: { color: '#606266', fontSize: 11, rotate: data.length > 5 ? 30 : 0 } },
-    yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#909399' } },
+    xAxis: { type: 'category', data: data.map(d => d.project_name), axisLabel: { color: chart.textRegular.value, fontSize: 11, rotate: data.length > 5 ? 30 : 0 } },
+    yAxis: { type: 'value', minInterval: 1, axisLabel: { color: chart.textSecondary.value } },
     series: [{
       type: 'bar',
       data: data.map(d => ({ value: d.overdue_count, itemStyle: { color: d.project_color, borderRadius: [6, 6, 0, 0] } })),
@@ -395,13 +397,13 @@ const tagPieOption = computed(() => {
   const data = dashData.value?.tag_distribution ?? []
   return {
     tooltip: { trigger: 'item', formatter: '{b}: {c}h ({d}%)' },
-    legend: { bottom: 0, textStyle: { color: '#606266', fontSize: 11 } },
+    legend: { bottom: 0, textStyle: { color: chart.textRegular.value, fontSize: 11 } },
     series: [{
       type: 'pie',
       radius: ['45%', '72%'],
       center: ['50%', '45%'],
       avoidLabelOverlap: false,
-      itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
+      itemStyle: { borderRadius: 4, borderColor: chart.bgColor.value, borderWidth: 2 },
       label: { show: false },
       emphasis: { label: { show: true, fontSize: 13, fontWeight: 'bold' } },
       data: data.map((d, i) => ({ value: d.hours, name: d.tag, itemStyle: { color: TAG_COLORS[i % TAG_COLORS.length] } })),
@@ -418,9 +420,9 @@ const saturationTrendOption = computed(() => {
     xAxis: {
       type: 'category',
       data: data.map(d => d.week_start.slice(5)),
-      axisLabel: { color: '#909399', fontSize: 10, rotate: 45 },
+      axisLabel: { color: chart.textSecondary.value, fontSize: 10, rotate: 45 },
     },
-    yAxis: { type: 'value', axisLabel: { color: '#909399', formatter: '{value}%' } },
+    yAxis: { type: 'value', axisLabel: { color: chart.textSecondary.value, formatter: '{value}%' } },
     series: [{
       type: 'line',
       data: data.map(d => d.saturation_pct),
@@ -447,9 +449,9 @@ const creationTrendOption = computed(() => {
     xAxis: {
       type: 'category',
       data: data.map(d => d.week_start.slice(5)),
-      axisLabel: { color: '#909399', fontSize: 10, rotate: 45 },
+      axisLabel: { color: chart.textSecondary.value, fontSize: 10, rotate: 45 },
     },
-    yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#909399' } },
+    yAxis: { type: 'value', minInterval: 1, axisLabel: { color: chart.textSecondary.value } },
     series: [{
       type: 'line',
       data: data.map(d => d.count),
@@ -468,10 +470,10 @@ const weeklyStackOption = computed(() => {
   const data = dashData.value?.weekly_breakdown ?? []
   return {
     tooltip: { trigger: 'axis', formatter: (p: any) => `${p[0].axisValue}<br/>${p.map((s: any) => `${s.seriesName}: ${s.value}h`).join('<br/>')}` },
-    legend: { bottom: 0, textStyle: { color: '#606266', fontSize: 12 } },
+    legend: { bottom: 0, textStyle: { color: chart.textRegular.value, fontSize: 12 } },
     grid: { left: '3%', right: '5%', bottom: '10%', containLabel: true },
-    xAxis: { type: 'category', data: data.map(d => d.week_start.slice(5)), axisLabel: { color: '#909399', fontSize: 11 } },
-    yAxis: { type: 'value', axisLabel: { color: '#909399', formatter: '{value}h' } },
+    xAxis: { type: 'category', data: data.map(d => d.week_start.slice(5)), axisLabel: { color: chart.textSecondary.value, fontSize: 11 } },
+    yAxis: { type: 'value', axisLabel: { color: chart.textSecondary.value, formatter: '{value}h' } },
     series: [
       {
         name: '任务',
@@ -529,7 +531,7 @@ const weeklyStackOption = computed(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
   font-size: 13px;
   gap: 6px;
 }

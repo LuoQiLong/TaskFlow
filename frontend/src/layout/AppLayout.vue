@@ -1,11 +1,9 @@
 <template>
   <el-container style="height:100vh">
-    <el-header height="64px" style="background:var(--el-bg-color);border-bottom:1px solid var(--el-border-color-light);display:flex;align-items:center;justify-content:space-between;padding:0 24px;box-shadow:0 1px 4px rgba(0,0,0,0.04)">
+    <el-header height="64px" style="background:var(--el-bg-color);border-bottom:1px solid var(--el-border-color-light);display:flex;align-items:center;justify-content:space-between;padding:0 24px;box-shadow:var(--el-box-shadow-lighter)">
       <div style="display:flex;align-items:center;gap:20px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center">
-            <el-icon color="#fff" size="18"><List /></el-icon>
-          </div>
+          <img src="/logo_taskflow.png" alt="TaskFlow" style="height:32px" />
           <span style="font-size:18px;font-weight:700;color:var(--el-text-color-primary)">TaskFlow</span>
         </div>
         <div style="display:flex;gap:4px;background:var(--el-fill-color-light);border-radius:8px;padding:3px">
@@ -13,7 +11,7 @@
             :style="{ padding:'8px 18px', border:'none', borderRadius:'6px', cursor:'pointer', fontSize:'14px', fontWeight:600, transition:'all 0.2s',
               background: isActive(item.path) ? 'var(--el-bg-color)' : 'transparent',
               color: isActive(item.path) ? '#6366f1' : 'var(--el-text-color-secondary)',
-              boxShadow: isActive(item.path) ? '0 1px 3px rgba(0,0,0,0.06)' : 'none' }">
+              boxShadow: isActive(item.path) ? 'var(--el-box-shadow-light)' : 'none' }">
             <span style="margin-right:4px">{{ item.icon }}</span>{{ item.label }}
           </button>
         </div>

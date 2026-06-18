@@ -1,5 +1,5 @@
 <template>
-  <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f9fbfc;position:relative;overflow:hidden">
+  <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--el-bg-color-page);position:relative;overflow:hidden">
     <!-- 左上角 紫色光晕 -->
     <div style="position:absolute;top:-200px;left:-200px;width:800px;height:800px;border-radius:50%;background:radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 60%);pointer-events:none"/>
     <!-- 右下角 蓝色光晕 -->
@@ -10,22 +10,22 @@
       <div style="width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,#8b5cf6,#6366f1);display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;box-shadow:0 8px 24px rgba(99,102,241,0.3)">
         <el-icon size="26" color="#fff"><List /></el-icon>
       </div>
-      <h1 style="font-size:26px;font-weight:700;color:#303133;margin:0;letter-spacing:-0.5px">TaskFlow</h1>
-      <p style="font-size:13px;color:#909399;margin:4px 0 0">简洁高效的任务管理看板</p>
+      <h1 style="font-size:26px;font-weight:700;color:var(--el-text-color-primary);margin:0;letter-spacing:-0.5px">TaskFlow</h1>
+      <p style="font-size:13px;color:var(--el-text-color-secondary);margin:4px 0 0">简洁高效的任务管理看板</p>
     </div>
 
     <!-- 卡片 -->
-    <el-card style="width:420px;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.06);position:relative;z-index:1" :body-style="{ padding: '36px 36px 28px' }">
+    <el-card style="width:420px;border-radius:16px;box-shadow:var(--el-box-shadow-light);position:relative;z-index:1" :body-style="{ padding: '36px 36px 28px' }">
       <!-- Tabs -->
-      <div style="display:flex;background:#f5f5f5;border-radius:10px;padding:4px;margin-bottom:24px">
+      <div style="display:flex;background:var(--el-fill-color-light);border-radius:10px;padding:4px;margin-bottom:24px">
         <div v-for="t in tabs" :key="t.key"
           @click="activeTab = t.key"
           :style="{
             flex:1, textAlign:'center', padding:'9px 0', borderRadius:'8px', cursor:'pointer',
             fontSize:'14px', fontWeight:600, transition:'all 0.25s',
-            background: activeTab === t.key ? '#fff' : 'transparent',
+            background: activeTab === t.key ? 'var(--el-bg-color)' : 'transparent',
             color: activeTab === t.key ? '#6366f1' : '#909399',
-            boxShadow: activeTab === t.key ? '0 2px 8px rgba(0,0,0,0.06)' : 'none'
+            boxShadow: activeTab === t.key ? 'var(--el-box-shadow-light)' : 'none'
           }"
         >{{ t.label }}</div>
       </div>

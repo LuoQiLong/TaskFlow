@@ -16,6 +16,7 @@
 | `work_items` | WorkItem | 工作周报的任务/工单（统一模型，type区分） |
 | `work_logs` | WorkLog | 工时记录 |
 | `milestones` | Milestone | 任务里程碑 |
+| `weekly_targets` | WeeklyTarget | 每周目标工时 |
 
 ---
 
@@ -154,6 +155,19 @@
 
 ---
 
+## 7. weekly_targets — 每周目标工时
+
+| 列名 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | INTEGER | PK, AUTOINCREMENT | 主键 |
+| `week_start` | DATE | NOT NULL | 所属周周一日期 |
+| `target_hours` | FLOAT | NOT NULL, DEFAULT 40.0 | 目标工时（小时） |
+| `user_id` | INTEGER | FK → users.id, NOT NULL | 所属用户 |
+
+**索引**: `ix_weekly_targets_week_user` on `(week_start, user_id)` UNIQUE
+
+---
+
 ## 表关系图
 
 ```
@@ -162,7 +176,8 @@ users
   ├── projects (1:N)
   ├── work_items (1:N)
   ├── work_logs (1:N)
-  └── milestones (1:N)
+  ├── milestones (1:N)
+  └── weekly_targets (1:N)
 
 projects
   └── work_items (1:N, cascade)
