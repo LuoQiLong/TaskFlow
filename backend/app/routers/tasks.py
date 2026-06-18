@@ -39,12 +39,18 @@ def get_tasks(
     search: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    overdue: bool = False,
+    include_archived: bool = False,
     sort_by: str = "created_at",
     sort_order: str = "desc",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Task).filter(Task.user_id == current_user.id)
+
+    # Default: exclude archived tasks from main view
+    if not include_archived:
+        query = query.filter(Task.status != "archived")
 
     # Filter by status (comma-separated)
     if status_filter:
@@ -77,6 +83,15 @@ def get_tasks(
         query = query.filter(Task.created_at >= date_from)
     if date_to:
         query = query.filter(Task.created_at <= date_to + "T23:59:59")
+
+    # Overdue filter: due_date passed and not done
+    if overdue:
+        from datetime import datetime
+        query = query.filter(
+            Task.due_date != None,
+            Task.due_date < datetime.now(),
+            Task.status != "done",
+        )
 
     # Sorting (validate field name to prevent SQL injection)
     allowed_sort_fields = {"created_at", "updated_at", "title", "priority", "due_date"}

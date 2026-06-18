@@ -100,6 +100,16 @@ def update_milestone(
                 WorkLog.is_system == True,
             ).delete()
 
+    # When editing hours of a completed milestone, sync the work log
+    if "hours" in update_data and m.is_completed and not m.is_locked:
+        from ..models.work import WorkLog
+        wl = db.query(WorkLog).filter(
+            WorkLog.milestone_id == m.id,
+            WorkLog.is_system == True,
+        ).first()
+        if wl:
+            wl.hours = update_data["hours"]
+
     db.commit()
     db.refresh(m)
     return m

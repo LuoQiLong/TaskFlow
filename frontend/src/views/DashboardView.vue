@@ -76,32 +76,28 @@
         </div>
 
         <!-- Summary cards -->
-        <el-row :gutter="16" style="margin-bottom:16px">
-          <el-col :span="6">
-            <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="border-radius:12px;border:none;background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
-              <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">总工时</div>
-              <div style="font-size:26px;font-weight:800;color:#6366f1">{{ dashData?.summary?.total_hours ?? 0 }}<span style="font-size:14px">h</span></div>
-            </el-card>
-          </el-col>
-          <el-col :span="6">
-            <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="border-radius:12px;border:none;background:linear-gradient(135deg,#ecfdf5,#d1fae5)">
-              <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">任务工时</div>
-              <div style="font-size:26px;font-weight:800;color:#67c23a">{{ dashData?.summary?.task_hours ?? 0 }}<span style="font-size:14px">h</span></div>
-            </el-card>
-          </el-col>
-          <el-col :span="6">
-            <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="border-radius:12px;border:none;background:linear-gradient(135deg,#fef2f2,#fecaca)">
-              <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">工单工时</div>
-              <div style="font-size:26px;font-weight:800;color:#f56c6c">{{ dashData?.summary?.work_order_hours ?? 0 }}<span style="font-size:14px">h</span></div>
-            </el-card>
-          </el-col>
-          <el-col :span="6">
-            <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="border-radius:12px;border:none;background:linear-gradient(135deg,#fffbeb,#fef3c7)">
-              <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">饱和度</div>
-              <div style="font-size:26px;font-weight:800;color:#e6a23c">{{ dashData?.summary?.saturation_pct ?? 0 }}<span style="font-size:14px">%</span></div>
-            </el-card>
-          </el-col>
-        </el-row>
+        <div style="display:flex;gap:16px;margin-bottom:16px">
+          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
+            <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">总工时</div>
+            <div style="font-size:24px;font-weight:800;color:#6366f1">{{ dashData?.summary?.total_hours ?? 0 }}<span style="font-size:13px">h</span></div>
+          </el-card>
+          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:linear-gradient(135deg,#ecfdf5,#d1fae5)">
+            <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">任务工时</div>
+            <div style="font-size:24px;font-weight:800;color:#67c23a">{{ dashData?.summary?.task_hours ?? 0 }}<span style="font-size:13px">h</span></div>
+          </el-card>
+          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:linear-gradient(135deg,#fef2f2,#fecaca)">
+            <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">工单工时</div>
+            <div style="font-size:24px;font-weight:800;color:#f56c6c">{{ dashData?.summary?.work_order_hours ?? 0 }}<span style="font-size:13px">h</span></div>
+          </el-card>
+          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:linear-gradient(135deg,#fffbeb,#fef3c7)">
+            <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">饱和度</div>
+            <div style="font-size:24px;font-weight:800;color:#e6a23c">{{ dashData?.summary?.saturation_pct ?? 0 }}<span style="font-size:13px">%</span></div>
+          </el-card>
+          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:linear-gradient(135deg,#fef0f0,#fde0e0)">
+            <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">超出工时</div>
+            <div style="font-size:24px;font-weight:800;color:#e04040">{{ overtimeHours }}<span style="font-size:13px">h</span></div>
+          </el-card>
+        </div>
 
         <!-- Row 1: 项目工时分布 + 任务vs工单占比 -->
         <el-row :gutter="16" style="margin-bottom:16px">
@@ -331,6 +327,12 @@ const hasTypeData = computed(() => {
 const hasOverdue = computed(() => (dashData.value?.overdue_by_project ?? []).length > 0)
 const hasTags = computed(() => (dashData.value?.tag_distribution ?? []).length > 0)
 
+const overtimeHours = computed(() => {
+  const total = dashData.value?.summary?.total_hours ?? 0
+  const target = dashData.value?.period?.monthly_target ?? 0
+  return Math.max(0, Math.round((total - target) * 10) / 10)
+})
+
 // Chart: 项目工时分布 (horizontal bar)
 const projectHoursBarOption = computed(() => {
   const data = (dashData.value?.project_hours ?? []).slice(0, 10)
@@ -381,7 +383,7 @@ const overdueBarOption = computed(() => {
     yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#909399' } },
     series: [{
       type: 'bar',
-      data: data.map(d => ({ value: d.overdue_count, itemStyle: { color: '#f56c6c', borderRadius: [6, 6, 0, 0] } })),
+      data: data.map(d => ({ value: d.overdue_count, itemStyle: { color: d.project_color, borderRadius: [6, 6, 0, 0] } })),
       barWidth: 40,
       label: { show: true, position: 'top', fontSize: 14, fontWeight: 700, color: '#f56c6c' },
     }],

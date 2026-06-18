@@ -5,6 +5,7 @@ export interface WeeklyStats {
   week_end: string
   total_hours: number
   weekly_target: number
+  is_custom_target: boolean
   saturation_pct: number
   task_hours: number
   work_order_hours: number

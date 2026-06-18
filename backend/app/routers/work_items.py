@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from ..database import get_db
 from ..models.work import WorkItem, WorkLog
@@ -38,6 +39,7 @@ def list_work_items(
     week_start_from: str | None = None,
     week_start_to: str | None = None,
     tag: str | None = None,
+    priority: str | None = None,
     overdue: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -55,6 +57,8 @@ def list_work_items(
             query = query.filter(WorkItem.status.in_(statuses))
     if tag:
         query = query.filter(WorkItem.tags.contains(tag))
+    if priority:
+        query = query.filter(WorkItem.priority == priority)
     if week_start:
         query = query.filter(WorkItem.week_start == week_start)
     elif week_start_from and week_start_to:
@@ -200,37 +204,48 @@ def update_work_item_status(
     if new_status == "done" and old_status != "done":
         if item.estimated_hours and item.estimated_hours > 0:
             from ..models.work import Milestone
-            # Create work log
-            sys_log = WorkLog(
-                work_item_id=item.id,
-                week_start=item.week_start,
-                hours=item.estimated_hours,
-                log_date=date.today(),
-                note="已完成",
-                is_system=True,
-                user_id=current_user.id,
-            )
-            db.add(sys_log)
-            # Create locked milestone (auto-completed)
-            max_order = db.query(Milestone.sort_order).filter(
-                Milestone.work_item_id == item.id
-            ).order_by(Milestone.sort_order.desc()).first()
-            next_order = (max_order[0] + 1) if max_order and max_order[0] is not None else 0
-            ms = Milestone(
-                work_item_id=item.id,
-                title=f"完成「{item.title}」",
-                hours=item.estimated_hours,
-                target_date=date.today(),
-                is_completed=True,
-                completed_at=datetime.now(),
-                is_locked=True,
-                sort_order=next_order,
-                user_id=current_user.id,
-            )
-            db.add(ms)
-            db.flush()
-            # Link work log to milestone
-            sys_log.milestone_id = ms.id
+            # Calculate total completed milestone hours for this item
+            completed_ms_hours = (
+                db.query(func.coalesce(func.sum(Milestone.hours), 0))
+                .filter(
+                    Milestone.work_item_id == item.id,
+                    Milestone.is_completed == True,
+                )
+                .scalar()
+            ) or 0.0
+            remaining = item.estimated_hours - float(completed_ms_hours)
+            if remaining > 0:
+                # Create work log for remaining hours
+                sys_log = WorkLog(
+                    work_item_id=item.id,
+                    week_start=item.week_start,
+                    hours=remaining,
+                    log_date=date.today(),
+                    note="已完成",
+                    is_system=True,
+                    user_id=current_user.id,
+                )
+                db.add(sys_log)
+                # Create locked milestone (auto-completed) for remaining hours
+                max_order = db.query(Milestone.sort_order).filter(
+                    Milestone.work_item_id == item.id
+                ).order_by(Milestone.sort_order.desc()).first()
+                next_order = (max_order[0] + 1) if max_order and max_order[0] is not None else 0
+                ms = Milestone(
+                    work_item_id=item.id,
+                    title=f"完成「{item.title}」",
+                    hours=remaining,
+                    target_date=date.today(),
+                    is_completed=True,
+                    completed_at=datetime.now(),
+                    is_locked=True,
+                    sort_order=next_order,
+                    user_id=current_user.id,
+                )
+                db.add(ms)
+                db.flush()
+                # Link work log to milestone
+                sys_log.milestone_id = ms.id
 
     # Auto-delete system work log + locked milestones when moved out of "done"
     if old_status == "done" and new_status != "done":

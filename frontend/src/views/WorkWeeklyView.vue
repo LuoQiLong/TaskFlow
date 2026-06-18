@@ -32,6 +32,20 @@
         <el-option v-for="t in allTags" :key="t" :label="'#' + t" :value="t"/>
       </el-select>
 
+      <!-- Priority filter -->
+      <el-select v-model="priorityFilter" placeholder="全部优先级" clearable size="large" style="width:140px" @change="onPriorityFilterChange">
+        <el-option label="🔴 高" value="high"/>
+        <el-option label="🟡 中" value="medium"/>
+        <el-option label="🟢 低" value="low"/>
+      </el-select>
+
+      <!-- Sort -->
+      <el-select v-model="sortBy" placeholder="排序" size="large" style="width:140px" @change="onSortChange">
+        <el-option label="📅 按日期" value="date"/>
+        <el-option label="🔥 按优先级" value="priority"/>
+        <el-option label="📅+🔥 日期+优先级" value="date_priority"/>
+      </el-select>
+
       <el-checkbox v-model="overdueFilter" size="large" @change="onOverdueFilterChange" style="height:40px;align-items:center">
         <span style="color:#f56c6c;font-weight:600">⏰ 超期</span>
       </el-checkbox>
@@ -40,6 +54,17 @@
         <el-icon style="margin-right:4px"><Plus /></el-icon>新建
       </el-button>
       <el-button size="large" @click="showProjectDialog = true" style="border-radius:8px">管理项目</el-button>
+    </div>
+
+    <!-- Weekday filter bar (week view only) -->
+    <div v-if="viewMode === 'week'" class="ww-weekday-bar" style="background:var(--el-bg-color);padding:10px 28px;border-bottom:1px solid var(--el-border-color-light);display:flex;gap:6px;align-items:center">
+      <span style="font-size:12px;color:var(--el-text-color-secondary);margin-right:4px;white-space:nowrap">日期筛选</span>
+      <button
+        v-for="d in [{value:'',label:'全部'}, ...weekdayOptions]"
+        :key="d.value"
+        :class="['ww-wd-btn', { 'ww-wd-btn--active': weekdayFilter === d.value }]"
+        @click="weekdayFilter = d.value"
+      >{{ d.label }}</button>
     </div>
 
     <!-- Main Content -->
@@ -100,9 +125,14 @@
                       <span style="font-size:11px;color:var(--el-text-color-secondary);white-space:nowrap">{{ getItemHours(item.id) }}h / {{ item.estimated_hours }}h</span>
                     </div>
                   </div>
-                  <!-- End date display -->
-                  <div v-if="item.end_date" style="margin-top:4px;font-size:11px" :style="{color: isOverdue(item) ? '#f56c6c' : 'var(--el-text-color-secondary)'}">
-                    📅 {{ item.end_date.slice(0, 16).replace('T', ' ') }}
+                  <!-- Date display with weekday color -->
+                  <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                    <span v-if="item.start_date" style="font-size:11px;display:flex;align-items:center;gap:2px" :style="{color: getWeekdayColor(item.start_date)}">
+                      📅 {{ formatDateDisplay(item.start_date) }} {{ getWeekdayLabel(item.start_date) }}
+                    </span>
+                    <span v-if="item.end_date" style="font-size:11px" :style="{color: isOverdue(item) ? '#f56c6c' : 'var(--el-text-color-secondary)'}">
+                      ⏱️ {{ item.end_date.slice(0, 16).replace('T', ' ') }}
+                    </span>
                   </div>
                 </div>
                 <div v-if="group.items.filter(i => i.status === col.key).length===0" style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#c0c4cc;font-size:13px;padding:20px 16px;gap:6px">
@@ -127,9 +157,46 @@
           <v-chart :option="saturationOption" style="height:220px" autoresize />
           <div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:-12px">
             已记录 <b style="color:var(--el-text-color-primary)">{{ currentStats?.total_hours || 0 }}h</b> / {{ currentStats?.weekly_target || currentStats?.monthly_target || 0 }}h
-            · 剩余 <b style="color:#67c23a">{{ currentStats?.remaining_hours || 0 }}h</b>
+            <template v-if="(currentStats?.total_hours || 0) > (currentStats?.weekly_target || currentStats?.monthly_target || 0)">
+              · <span style="color:#f56c6c;font-weight:600">⚡ 超出 {{ Math.round(((currentStats?.total_hours || 0) - (currentStats?.weekly_target || currentStats?.monthly_target || 0)) * 10) / 10 }}h</span>
+            </template>
+            <template v-else>
+              · 剩余 <b style="color:#67c23a">{{ currentStats?.remaining_hours || 0 }}h</b>
+            </template>
           </div>
+          <div v-if="currentStats?.is_custom_target && (currentStats?.weekly_target || currentStats?.monthly_target || 40) !== 40" style="font-size:10px;color:#e6a23c;margin-top:2px">📝 自定义目标</div>
+          <el-button text size="small" type="primary" style="margin-top:4px" @click="openTargetDialog">⚙️ 设置目标</el-button>
         </el-card>
+
+        <!-- Target Dialog -->
+        <el-dialog v-model="targetDialogVisible" width="420px" destroy-on-close>
+          <template #header>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center">
+                <span style="font-size:18px">🎯</span>
+              </div>
+              <span style="font-size:17px;font-weight:700;color:var(--el-text-color-primary)">设置饱和度目标</span>
+            </div>
+          </template>
+          <div style="text-align:center">
+            <div style="font-size:14px;color:var(--el-text-color-secondary);margin-bottom:12px">
+              {{ viewMode === 'week' ? '本周' : '本月' }}目标工时
+            </div>
+            <el-input-number v-model="targetFormHours" :min="1" :max="168" :step="1" size="large" style="width:180px" controls-position="right"/>
+            <span style="margin-left:8px;font-size:16px;font-weight:600">h</span>
+            <div style="margin-top:14px;display:flex;gap:8px;justify-content:center">
+              <el-button size="small" @click="targetFormHours = 8" :type="targetFormHours === 8 ? 'primary' : ''">8h</el-button>
+              <el-button size="small" @click="targetFormHours = 16" :type="targetFormHours === 16 ? 'primary' : ''">16h</el-button>
+              <el-button size="small" @click="targetFormHours = 24" :type="targetFormHours === 24 ? 'primary' : ''">24h</el-button>
+              <el-button size="small" @click="targetFormHours = 32" :type="targetFormHours === 32 ? 'primary' : ''">32h</el-button>
+            </div>
+          </div>
+          <template #footer>
+            <el-button @click="targetDialogVisible = false">取消</el-button>
+            <el-button v-if="currentStats?.is_custom_target && (currentStats?.weekly_target || currentStats?.monthly_target || 40) !== 40" type="danger" plain @click="resetTarget">恢复默认</el-button>
+            <el-button type="primary" @click="saveTarget" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none">保存</el-button>
+          </template>
+        </el-dialog>
 
         <!-- Task vs Work Order -->
         <el-row :gutter="10" style="margin-bottom:14px">
@@ -153,6 +220,17 @@
         <el-card v-if="(currentStats?.project_breakdown||[]).length" shadow="never" style="border-radius:12px;margin-bottom:14px">
           <template #header><span style="font-weight:700;font-size:13px">按项目分布</span></template>
           <v-chart :option="projectBarOption" style="height:180px" autoresize />
+        </el-card>
+
+        <!-- Daily hours by weekday -->
+        <el-card shadow="never" style="border-radius:12px;margin-bottom:14px">
+          <template #header>
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font-weight:700;font-size:13px">每日工时分布（周一~周日）</span>
+              <span style="font-size:12px;color:var(--el-text-color-secondary)">总计 <b style="color:#6366f1">{{ dailyHours.reduce((a,b) => a + b, 0) }}h</b></span>
+            </div>
+          </template>
+          <v-chart :option="dailyBarOption" style="height:200px" autoresize />
         </el-card>
 
         <!-- Trend line chart -->
@@ -374,16 +452,20 @@
     <!-- Project Management Dialog -->
     <el-dialog v-model="showProjectDialog" title="项目管理" width="480px" destroy-on-close>
       <div style="display:flex;gap:8px;margin-bottom:16px">
-        <el-input v-model="newProjectName" placeholder="项目名称" size="large" style="flex:1" @keyup.enter="addProject"/>
+        <el-input v-model="newProjectName" placeholder="项目名称" size="large" style="flex:1" @keyup.enter="submitProject"/>
         <el-color-picker v-model="newProjectColor" size="large"/>
-        <el-button type="primary" size="large" @click="addProject" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none">添加</el-button>
+        <el-button type="primary" size="large" @click="submitProject" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none">{{ editingProjectId ? '保存' : '添加' }}</el-button>
+        <el-button v-if="editingProjectId" size="large" @click="cancelEditProject">取消</el-button>
       </div>
       <div v-for="p in projectStore.projects" :key="p.id" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:8px;margin-bottom:6px;background:var(--el-fill-color-light)">
         <div style="display:flex;align-items:center;gap:8px">
           <span :style="{width:'14px',height:'14px',borderRadius:'4px',background:p.color,display:'inline-block'}"/>
           <span style="font-size:14px;font-weight:600;color:var(--el-text-color-primary)">{{ p.name }}</span>
         </div>
-        <el-button size="small" text type="danger" @click="removeProject(p.id)"><el-icon><Delete/></el-icon></el-button>
+        <div style="display:flex;gap:4px">
+          <el-button size="small" text @click="editProject(p)"><el-icon><EditPen/></el-icon></el-button>
+          <el-button size="small" text type="danger" @click="removeProject(p.id)"><el-icon><Delete/></el-icon></el-button>
+        </div>
       </div>
       <div v-if="projectStore.projects.length===0" style="text-align:center;color:var(--el-text-color-secondary);padding:20px">暂无项目，请先添加</div>
     </el-dialog>
@@ -407,6 +489,7 @@ import { useWorkItemStore } from '@/stores/work-item'
 import type { WorkItem } from '@/api/work-items'
 import { fetchWorkItems } from '@/api/work-items'
 import { getWeeklyStats, getTrendStats, getMonthlyStats, type WeeklyStats, type TrendPoint, type MonthlyStats } from '@/api/work-stats'
+import { getWeeklyTarget, setWeeklyTarget } from '@/api/weekly-targets'
 import { fetchMilestones, createMilestone, updateMilestone, deleteMilestone, reorderMilestones, type Milestone } from '@/api/milestones'
 import { PRIORITY_OPTIONS, STATUS_OPTIONS, PRIORITY_MAP } from '@/types'
 
@@ -508,13 +591,12 @@ function onViewModeChange() { refreshData() }
 async function refreshData() {
   if (viewMode.value === 'week') {
     store.setFilter('week_start', formatDate(currentWeekStart.value))
-    fetchStats()
-    fetchTrend()
+    await store.fetch()
+    await Promise.all([fetchStats(), fetchTrend(), computeDailyHours()])
   } else {
     delete store.filters.week_start
     await fetchMonthItems()
-    fetchStats()
-    fetchTrend()
+    await Promise.all([fetchStats(), fetchTrend(), computeDailyHours()])
   }
 }
 
@@ -542,8 +624,100 @@ function onOverdueFilterChange(val: boolean) {
   store.setFilter('overdue', val || undefined)
 }
 
-// ── Work Items ──
-const filteredItems = computed(() => store.items)
+const priorityFilter = ref('')
+function onPriorityFilterChange(val: string) {
+  store.setFilter('priority', val || undefined)
+}
+
+// ── Sort ──
+const sortBy = ref('')
+const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
+
+function onSortChange() {} // triggers computed re-eval via sortBy ref
+
+// ── Weekday filter ──
+const weekdayFilter = ref('')
+const weekdayOptions = [
+  { value: '0', label: '周一' }, { value: '1', label: '周二' }, { value: '2', label: '周三' },
+  { value: '3', label: '周四' }, { value: '4', label: '周五' }, { value: '5', label: '周六' }, { value: '6', label: '周日' },
+]
+
+function onWeekdayFilterChange() {} // triggers computed re-eval via weekdayFilter ref
+
+// ── Weekday colors (localStorage persisted) ──
+const DEFAULT_WEEKDAY_COLORS: Record<string, string> = {
+  '0': '#6366f1', '1': '#06b6d4', '2': '#67c23a', '3': '#e6a23c', '4': '#f56c6c', '5': '#8b5cf6', '6': '#909399',
+}
+
+const weekdayColors = ref<Record<string, string>>({ ...DEFAULT_WEEKDAY_COLORS })
+try {
+  const saved = localStorage.getItem('taskflow_weekday_colors')
+  if (saved) weekdayColors.value = { ...DEFAULT_WEEKDAY_COLORS, ...JSON.parse(saved) }
+} catch {}
+
+function saveWeekdayColors() {
+  localStorage.setItem('taskflow_weekday_colors', JSON.stringify(weekdayColors.value))
+}
+
+function getWeekdayColor(dateStr: string): string {
+  const d = new Date(dateStr)
+  const dow = String(d.getDay() === 0 ? 6 : d.getDay() - 1) // 0=Mon..6=Sun
+  return weekdayColors.value[dow] || '#909399'
+}
+
+function getWeekdayLabel(dateStr: string): string {
+  const d = new Date(dateStr)
+  const map = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+  return map[d.getDay() === 0 ? 6 : d.getDay() - 1]
+}
+
+function formatDateDisplay(dateStr: string): string {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+// ── Work Items (with client-side filtering & sorting) ──
+const filteredItems = computed(() => {
+  let list = [...store.items]
+
+  // Weekday filter (client-side, week view only)
+  if (viewMode.value === 'week' && weekdayFilter.value !== '') {
+    const targetDow = parseInt(weekdayFilter.value)
+    list = list.filter(item => {
+      if (!item.start_date) return false
+      const d = new Date(item.start_date)
+      const dow = d.getDay() === 0 ? 6 : d.getDay() - 1 // 0=Mon..6=Sun
+      return dow === targetDow
+    })
+  }
+
+  // Sort
+  if (sortBy.value === 'date') {
+    list.sort((a, b) => {
+      if (!a.start_date && !b.start_date) return 0
+      if (!a.start_date) return 1
+      if (!b.start_date) return -1
+      return new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+    })
+  } else if (sortBy.value === 'priority') {
+    list.sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 2) - (PRIORITY_ORDER[b.priority] ?? 2))
+  } else if (sortBy.value === 'date_priority') {
+    list.sort((a, b) => {
+      // First by date (date only, ignore time)
+      const da = a.start_date ? a.start_date.slice(0, 10) : ''
+      const db = b.start_date ? b.start_date.slice(0, 10) : ''
+      if (da && db && da !== db) return da.localeCompare(db)
+      if (da && !db) return -1
+      if (!da && db) return 1
+      // Then by priority (high → medium → low)
+      return (PRIORITY_ORDER[a.priority] ?? 2) - (PRIORITY_ORDER[b.priority] ?? 2)
+    })
+  }
+
+  return list
+})
 
 const groupedItems = computed(() => {
   const map = new Map<number, { projectId: number; projectName: string; projectColor: string; items: WorkItem[] }>()
@@ -592,6 +766,7 @@ async function onDrop(e: DragEvent, toStatus: string, group: any) {
     await fetchMonthItems()
   }
   await store.loadLogs(itemId)
+  computeDailyHours()
   await fetchStats()
   await fetchTrend()
   ElMessage.success('已移动')
@@ -625,6 +800,7 @@ async function saveEditLog(logId: number) {
   editLogId.value = null
   store.loadLogs(editingItem.value.id).then(logs => { editingLogs.value = logs })
   refreshStats()
+  computeDailyHours()
 }
 
 const itemForm = reactive({
@@ -736,6 +912,7 @@ async function addLogEntry() {
     // Refresh logs
     store.loadLogs(editingItem.value.id).then(logs => { editingLogs.value = logs })
     refreshStats()
+    computeDailyHours()
   } catch { ElMessage.error('记录失败') }
 }
 
@@ -744,6 +921,7 @@ async function removeLogEntry(logId: number) {
   await store.removeLog(logId, editingItem.value.id)
   store.loadLogs(editingItem.value.id).then(logs => { editingLogs.value = logs })
   refreshStats()
+  computeDailyHours()
 }
 
 // ── Milestones ──
@@ -804,6 +982,14 @@ async function saveMilestone() {
     }
     msDialogVisible.value = false
     await loadMilestones()
+    // Refresh work logs, stats, and daily chart
+    if (editingItem.value) {
+      await store.loadLogs(editingItem.value.id).then(logs => { editingLogs.value = logs })
+      await refreshStats()
+      computeDailyHours()
+      // Refresh store items so left panel progress bars update
+      await store.fetch()
+    }
   } catch { ElMessage.error('操作失败') }
   finally { savingMs.value = false }
 }
@@ -813,8 +999,10 @@ async function toggleMilestone(m: Milestone) {
   await loadMilestones()
   // Refresh work logs and stats (completion auto-creates/deletes work log)
   if (editingItem.value) {
-    store.loadLogs(editingItem.value.id).then(logs => { editingLogs.value = logs })
-    refreshStats()
+    await store.loadLogs(editingItem.value.id).then(logs => { editingLogs.value = logs })
+    await refreshStats()
+    computeDailyHours()
+    await store.fetch()
   }
 }
 
@@ -828,8 +1016,10 @@ async function clearCompletedMilestones() {
     }
     await loadMilestones()
     if (editingItem.value) {
-      store.loadLogs(editingItem.value.id).then(logs => { editingLogs.value = logs })
-      refreshStats()
+      await store.loadLogs(editingItem.value.id).then(logs => { editingLogs.value = logs })
+      await refreshStats()
+      computeDailyHours()
+      await store.fetch()
     }
   } catch {}
 }
@@ -839,6 +1029,13 @@ async function removeMilestone(id: number) {
     await ElMessageBox.confirm('删除此里程碑？', '确认', { type: 'warning' })
     await deleteMilestone(id)
     await loadMilestones()
+    // Refresh work logs, stats, and daily chart
+    if (editingItem.value) {
+      await store.loadLogs(editingItem.value.id).then(logs => { editingLogs.value = logs })
+      await refreshStats()
+      computeDailyHours()
+      await store.fetch()
+    }
   } catch {}
 }
 
@@ -869,12 +1066,34 @@ async function onMsDrop(e: DragEvent, target: Milestone, targetIdx: number) {
 const showProjectDialog = ref(false)
 const newProjectName = ref('')
 const newProjectColor = ref('#6366f1')
+const editingProjectId = ref<number | null>(null)
 
-async function addProject() {
+async function submitProject() {
   if (!newProjectName.value.trim()) return
-  await projectStore.add({ name: newProjectName.value.trim(), color: newProjectColor.value })
+  if (editingProjectId.value) {
+    await projectStore.update(editingProjectId.value, { name: newProjectName.value.trim(), color: newProjectColor.value })
+    ElMessage.success('项目已更新')
+  } else {
+    await projectStore.add({ name: newProjectName.value.trim(), color: newProjectColor.value })
+    ElMessage.success('项目已添加')
+  }
+  resetProjectForm()
+}
+
+function editProject(p: { id: number; name: string; color: string }) {
+  editingProjectId.value = p.id
+  newProjectName.value = p.name
+  newProjectColor.value = p.color
+}
+
+function cancelEditProject() {
+  resetProjectForm()
+}
+
+function resetProjectForm() {
+  editingProjectId.value = null
   newProjectName.value = ''
-  ElMessage.success('项目已添加')
+  newProjectColor.value = '#6366f1'
 }
 
 async function removeProject(id: number) {
@@ -910,6 +1129,62 @@ async function fetchStats() {
 }
 async function fetchTrend() { trendData.value = await getTrendStats(12) }
 function refreshStats() { fetchStats() }
+
+// ── Custom target ──
+const targetDialogVisible = ref(false)
+const targetFormHours = ref(40)
+
+function openTargetDialog() {
+  targetFormHours.value = currentStats.value?.weekly_target || currentStats.value?.monthly_target || 40
+  targetDialogVisible.value = true
+}
+
+async function saveTarget() {
+  try {
+    if (viewMode.value === 'week') {
+      const ws = formatDate(currentWeekStart.value)
+      await setWeeklyTarget(ws, targetFormHours.value)
+      ElMessage.success(`已设置目标为 ${targetFormHours.value}h`)
+    } else {
+      const y = currentMonth.value.year, m = currentMonth.value.month
+      let d = getMonday(new Date(y, m - 1, 1))
+      const lastDay = new Date(y, m, 0)
+      while (d <= lastDay) {
+        await setWeeklyTarget(formatDate(d), targetFormHours.value)
+        d = new Date(d.getTime() + 7 * 86400000)
+      }
+      ElMessage.success(`已设置目标为 ${targetFormHours.value}h`)
+    }
+    targetDialogVisible.value = false
+    await Promise.all([fetchStats(), fetchTrend()])
+  } catch { ElMessage.error('保存失败') }
+}
+
+async function resetTarget() {
+  try {
+    if (viewMode.value === 'week') {
+      await setWeeklyTarget(formatDate(currentWeekStart.value), 40)
+      ElMessage.success('已恢复默认 40h')
+    }
+    targetDialogVisible.value = false
+    await Promise.all([fetchStats(), fetchTrend()])
+  } catch { ElMessage.error('操作失败') }
+}
+
+// Daily breakdown by weekday (Mon-Sun) — based on work item estimated_hours + start_date
+const dailyHours = ref<number[]>([0, 0, 0, 0, 0, 0, 0])
+
+function computeDailyHours() {
+  const hours = [0, 0, 0, 0, 0, 0, 0]
+  for (const item of store.items) {
+    const eh = item.estimated_hours || 0
+    if (!eh || !item.start_date) continue
+    const d = new Date(item.start_date)
+    const dow = d.getDay() === 0 ? 6 : d.getDay() - 1 // 0=Mon..6=Sun
+    if (dow >= 0 && dow < 7) hours[dow] += eh
+  }
+  dailyHours.value = hours.map(h => Math.round(h * 10) / 10)
+}
 
 // ── Chart options ──
 const saturationOption = computed(() => {
@@ -947,6 +1222,22 @@ const projectBarOption = computed(() => {
   }
 })
 
+// Daily hours bar chart (Mon-Sun)
+const WEEKDAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+const WEEKDAY_COLORS = ['#6366f1', '#06b6d4', '#67c23a', '#e6a23c', '#f56c6c', '#8b5cf6', '#909399']
+const dailyBarOption = computed(() => ({
+  tooltip: { trigger: 'axis', formatter: (p: any) => `${p[0].name}: ${p[0].value}h` },
+  grid: { left: '3%', right: '8%', bottom: '3%', top: '8%', containLabel: true },
+  xAxis: { type: 'category', data: WEEKDAY_LABELS, axisLabel: { color: '#909399', fontSize: 11 } },
+  yAxis: { type: 'value', axisLabel: { color: '#909399', formatter: '{value}h' }, splitLine: { lineStyle: { type: 'dashed', color: '#e4e7ed' } } },
+  series: [{
+    type: 'bar',
+    data: dailyHours.value.map((h, i) => ({ value: h, itemStyle: { color: WEEKDAY_COLORS[i], borderRadius: [6, 6, 0, 0] } })),
+    barWidth: 28,
+    label: { show: true, position: 'top', fontSize: 11, fontWeight: 600, color: '#606266', formatter: (p: any) => p.value > 0 ? p.value + 'h' : '' },
+  }],
+}))
+
 const trendOption = computed(() => ({
   tooltip: { trigger: 'axis' },
   grid: { left: '3%', right: '5%', bottom: '5%', top: '8%', containLabel: true },
@@ -975,13 +1266,12 @@ watch(() => store.items, async (newItems) => {
   for (const item of raw) {
     await store.loadLogs(item.id)
   }
+  computeDailyHours()
 }, { deep: false, immediate: true })
 
 onMounted(async () => {
   await projectStore.fetch()
-  store.setFilter('week_start', formatDate(currentWeekStart.value))
-  fetchStats()
-  fetchTrend()
+  await refreshData()
 })
 </script>
 
@@ -1020,5 +1310,39 @@ onMounted(async () => {
 .ms-clear-btn:hover {
   background: linear-gradient(135deg,#f56c6c,#e04040) !important;
   color: #fff !important;
+}
+
+/* Weekday filter buttons */
+.ww-wd-btn {
+  padding: 4px 14px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 16px;
+  background: var(--el-bg-color);
+  color: var(--el-text-color-regular);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+  white-space: nowrap;
+}
+.ww-wd-btn:hover {
+  color: #6366f1;
+  border-color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.06);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.12);
+}
+.ww-wd-btn--active {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.25);
+}
+.ww-wd-btn--active:hover {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
 }
 </style>

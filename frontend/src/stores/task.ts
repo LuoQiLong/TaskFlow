@@ -61,10 +61,35 @@ export const useTaskStore = defineStore('task', () => {
     }
   }
 
-  function setFilter(key: keyof TaskFilters, value: string) {
-    filters.value[key] = value || undefined
+  function setFilter(key: keyof TaskFilters, value: string | boolean | undefined) {
+    if (value === '' || value === null || value === undefined) {
+      delete filters.value[key]
+    } else {
+      (filters.value as any)[key] = value
+    }
+    fetchTasks()
   }
-  function clearFilters() { filters.value = {} }
+  function clearFilters() {
+    filters.value = {}
+    fetchTasks()
+  }
 
-  return { tasks, filters, isLoading, error, fetchTasks, addTask, updateTask, removeTask, moveTask, setFilter, clearFilters }
+  async function archiveTask(id: number) {
+    await tasksApi.updateTaskStatus(id, { status: 'archived', column_order: 0 })
+    tasks.value = tasks.value.filter(t => t.id !== id)
+  }
+  async function unarchiveTask(id: number) {
+    await tasksApi.updateTaskStatus(id, { status: 'todo', column_order: 0 })
+    await fetchTasks()
+  }
+  async function fetchArchivedTasks(search?: string): Promise<Task[]> {
+    const params: any = { include_archived: true, status: 'archived' }
+    if (search) params.search = search
+    return tasksApi.fetchTasks(params)
+  }
+  async function deleteArchivedTask(id: number) {
+    await tasksApi.deleteTask(id)
+  }
+
+  return { tasks, filters, isLoading, error, fetchTasks, addTask, updateTask, removeTask, moveTask, setFilter, clearFilters, archiveTask, unarchiveTask, fetchArchivedTasks, deleteArchivedTask }
 })

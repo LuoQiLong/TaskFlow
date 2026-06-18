@@ -23,6 +23,8 @@ export interface WorkLogCreate {
 export interface WorkLogFilters {
   work_item_id?: number
   week_start?: string
+  week_start_from?: string
+  week_start_to?: string
 }
 
 export const fetchWorkLogs = (filters: WorkLogFilters = {}) =>

@@ -16,7 +16,7 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=255)
     description: Optional[str] = None
-    status: Optional[str] = Field(default=None, pattern="^(todo|in_progress|done)$")
+    status: Optional[str] = Field(default=None, pattern="^(todo|in_progress|done|archived)$")
     priority: Optional[str] = Field(default=None, pattern="^(low|medium|high)$")
     column_order: Optional[int] = None
     due_date: Optional[datetime] = None
@@ -25,13 +25,13 @@ class TaskUpdate(BaseModel):
 
 
 class StatusUpdate(BaseModel):
-    status: str = Field(pattern="^(todo|in_progress|done)$")
+    status: str = Field(pattern="^(todo|in_progress|done|archived)$")
     column_order: int = Field(ge=0)
 
 
 class ReorderItem(BaseModel):
     id: int
-    status: str = Field(pattern="^(todo|in_progress|done)$")
+    status: str = Field(pattern="^(todo|in_progress|done|archived)$")
     column_order: int = Field(ge=0)
 
 

@@ -7,13 +7,28 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from ..database import get_db
-from ..models.work import WorkLog, WorkItem, Project
+from ..models.work import WorkLog, WorkItem, Project, WeeklyTarget
 from ..models.user import User
 from ..middleware.auth import get_current_user
 
 router = APIRouter(prefix="/api/work-stats", tags=["work-stats"])
 
 WEEKLY_HOURS = 40
+
+
+def _get_weekly_target(db: Session, user_id: int, week_start: date) -> tuple[float, bool]:
+    """Return (target_hours, is_custom) for a given week."""
+    target = (
+        db.query(WeeklyTarget)
+        .filter(
+            WeeklyTarget.user_id == user_id,
+            WeeklyTarget.week_start == week_start,
+        )
+        .first()
+    )
+    if target:
+        return target.target_hours, True
+    return float(WEEKLY_HOURS), False
 
 
 def _get_week_start(d: date) -> date:
@@ -72,13 +87,14 @@ def _build_saturation_trend(db: Session, user_id: int, weeks: int = 12, referenc
             .scalar()
         ) or 0
         total = float(logged) + float(planned)
+        target, _ = _get_weekly_target(db, user_id, ws)
         trend.append({
             "week_start": ws.isoformat(),
             "week_end": week_end.isoformat(),
             "total_hours": round(total, 1),
             "logged_hours": round(float(logged), 1),
             "planned_hours": round(float(planned), 1),
-            "saturation_pct": round((total / WEEKLY_HOURS) * 100, 1),
+            "saturation_pct": round((total / target) * 100, 1) if target > 0 else 0,
         })
     return trend
 
@@ -105,7 +121,8 @@ def get_weekly_stats(
     )
 
     total_hours = sum(log.hours for log in logs)
-    saturation_pct = round((total_hours / WEEKLY_HOURS) * 100, 1) if WEEKLY_HOURS > 0 else 0
+    target_hours, is_custom = _get_weekly_target(db, current_user.id, ws)
+    saturation_pct = round((total_hours / target_hours) * 100, 1) if target_hours > 0 else 0
 
     # Split by work item type (task vs work_order)
     task_hours = 0.0
@@ -137,12 +154,13 @@ def get_weekly_stats(
         "week_start": week_start,
         "week_end": week_end.isoformat(),
         "total_hours": round(total_hours, 1),
-        "weekly_target": WEEKLY_HOURS,
+        "weekly_target": round(target_hours, 1),
+        "is_custom_target": is_custom,
         "saturation_pct": saturation_pct,
         "task_hours": round(task_hours, 1),
         "work_order_hours": round(work_order_hours, 1),
         "project_breakdown": sorted(project_hours.values(), key=lambda x: x["hours"], reverse=True),
-        "remaining_hours": round(max(0, WEEKLY_HOURS - total_hours), 1),
+        "remaining_hours": round(max(0, target_hours - total_hours), 1),
     }
 
 
@@ -217,13 +235,16 @@ def get_monthly_stats(
         })
 
     num_weeks = len(month_weeks)
-    monthly_target = num_weeks * WEEKLY_HOURS
+    monthly_target = 0.0
+    for ws in month_weeks:
+        t, _ = _get_weekly_target(db, current_user.id, ws)
+        monthly_target += t
 
     return {
         "year": year,
         "month": month,
         "num_weeks": num_weeks,
-        "monthly_target": monthly_target,
+        "monthly_target": round(monthly_target, 1),
         "total_hours": round(month_total, 1),
         "saturation_pct": round((month_total / monthly_target) * 100, 1) if monthly_target > 0 else 0,
         "task_hours": round(month_task_hours, 1),
@@ -246,7 +267,10 @@ def get_dashboard_stats(
     if not month_weeks:
         month_weeks = [_get_week_start(date(year, month, 1))]
     num_weeks = len(month_weeks)
-    monthly_target = num_weeks * WEEKLY_HOURS
+    monthly_target = 0.0
+    for ws in month_weeks:
+        t, _ = _get_weekly_target(db, current_user.id, ws)
+        monthly_target += t
     num_days = calendar.monthrange(year, month)[1]
     first_ws = month_weeks[0]
     last_week_end = month_weeks[-1] + timedelta(days=6)

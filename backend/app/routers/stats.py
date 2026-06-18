@@ -17,7 +17,7 @@ def get_overview(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    tasks = db.query(Task).filter(Task.user_id == current_user.id).all()
+    tasks = db.query(Task).filter(Task.user_id == current_user.id, Task.status != "archived").all()
 
     total = len(tasks)
     status_counts = {"todo": 0, "in_progress": 0, "done": 0}
@@ -50,7 +50,7 @@ def get_trend(
             func.date(Task.created_at).label("date"),
             func.count(Task.id).label("count"),
         )
-        .filter(Task.user_id == current_user.id, Task.created_at >= cutoff_date)
+        .filter(Task.user_id == current_user.id, Task.created_at >= cutoff_date, Task.status != "archived")
         .group_by(func.date(Task.created_at))
         .order_by("date")
         .all()

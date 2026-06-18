@@ -160,3 +160,24 @@ class Milestone(Base):
             "user_id": self.user_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class WeeklyTarget(Base):
+    __tablename__ = "weekly_targets"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    week_start = Column(Date, nullable=False)
+    target_hours = Column(Float, nullable=False, default=40.0)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    __table_args__ = (
+        Index("ix_weekly_targets_week_user", "week_start", "user_id", unique=True),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "week_start": self.week_start.isoformat() if self.week_start else None,
+            "target_hours": self.target_hours,
+            "user_id": self.user_id,
+        }

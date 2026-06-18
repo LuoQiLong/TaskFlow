@@ -14,6 +14,8 @@ router = APIRouter(prefix="/api/work-logs", tags=["work-logs"])
 def list_work_logs(
     work_item_id: int | None = None,
     week_start: str | None = None,
+    week_start_from: str | None = None,
+    week_start_to: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -23,6 +25,8 @@ def list_work_logs(
         query = query.filter(WorkLog.work_item_id == work_item_id)
     if week_start:
         query = query.filter(WorkLog.week_start == week_start)
+    elif week_start_from and week_start_to:
+        query = query.filter(WorkLog.week_start >= week_start_from, WorkLog.week_start <= week_start_to)
 
     logs = query.order_by(WorkLog.log_date.desc(), WorkLog.created_at.desc()).all()
     return logs

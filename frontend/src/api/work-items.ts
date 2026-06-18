@@ -66,6 +66,7 @@ export interface WorkItemFilters {
   week_start_from?: string
   week_start_to?: string
   tag?: string
+  priority?: string
   overdue?: boolean
 }
 
