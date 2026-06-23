@@ -9,7 +9,7 @@ TaskFlow is a dual-module task management kanban board with Chinese UI.
 - **Kanban module** — three-column drag-and-drop task board (todo / in_progress / done) with filtering, archiving, overdue detection, and basic stats
 - **Work Weekly module** — project-based tasks/work-orders with hour tracking, milestones, saturation stats (40h/week default, per-week customizable targets), cross-week splitting, and a dashboard
 
-**Stack**: FastAPI + SQLAlchemy + SQLite (backend) / Vue 3 + TypeScript + Vite + Element Plus + Pinia + ECharts (frontend)
+**Stack**: FastAPI + SQLAlchemy + SQL Server / SQLite (backend) / Vue 3 + TypeScript + Vite + Element Plus + Pinia + ECharts (frontend)
 
 ## Common Commands
 
@@ -31,7 +31,8 @@ Backend Swagger docs: `http://localhost:8000/docs`
 
 Environment variables (optional, with defaults in `backend/app/config.py`):
 - `TASKFLOW_SECRET_KEY` — JWT signing key (default: dev key, **change in production**)
-- `TASKFLOW_DATABASE_URL` — SQLite path (default: `sqlite:///./taskflow.db`)
+- `TASKFLOW_DATABASE_URL` — database URL (default: SQL Server via `mssql+pyodbc`, supports SQLite)
+- `TASKFLOW_SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` — QQ SMTP for password reset emails
 
 ## Architecture
 
@@ -39,38 +40,44 @@ Environment variables (optional, with defaults in `backend/app/config.py`):
 
 ```
 backend/app/
-  main.py              # FastAPI app, CORS, router registration, Base.metadata.create_all
-  config.py            # SECRET_KEY, DATABASE_URL (SQLite), CORS_ORIGINS
+  main.py              # FastAPI app, CORS, router registration, DB auto-create + migration
+  config.py            # SECRET_KEY, DATABASE_URL, CORS_ORIGINS, SMTP config
   database.py          # SQLAlchemy engine + SessionLocal + get_db dependency
-  middleware/auth.py   # get_current_user: Bearer JWT → user lookup
+  middleware/auth.py   # get_current_user (JWT type guard, is_active check), require_admin, resolve_target_user
   models/              # SQLAlchemy ORM models (User, Task, Project, WorkItem, WorkLog, Milestone, WeeklyTarget)
   schemas/             # Pydantic v2 models for request/response validation
-  routers/             # 9 route modules (auth, tasks, stats, projects, work_items, work_logs, work_stats, milestones, weekly_targets)
-  utils/security.py    # bcrypt password hashing + JWT create/decode
+  routers/             # 10 route modules (auth, tasks, stats, projects, work_items, work_logs, work_stats, milestones, weekly_targets, admin)
+  utils/security.py    # bcrypt password hashing + JWT create/decode + password reset tokens
+  utils/email.py       # QQ SMTP email sending for password reset
 ```
 
 - All routes are user-scoped via `current_user: User = Depends(get_current_user)`
-- JWT uses `python-jose` with `HS256`, 24h expiry, no refresh mechanism
+- JWT uses `python-jose` with `HS256`, 24h expiry; reset tokens use 15min expiry with `type: "password_reset"` claim
 - Pydantic response models use `model_config = {"from_attributes": True}` for ORM compatibility
 - All timestamps use `datetime.now()` (Beijing time), NOT UTC
-- SQLite with WAL mode + foreign key PRAGMAs enabled
+- `resolve_target_user(current_user, target_user_id)` helper for admin scope switching across all routes
+- User roles: `admin` / `member`; first admin designated manually in database
 
 ### Frontend
 
 ```
 frontend/src/
   main.ts              # App entry: Pinia + Router + Element Plus (zh-CN)
-  router/index.ts      # Vue Router with auth guard (checks localStorage 'auth')
+  router/index.ts      # Vue Router with auth guard (checks localStorage 'auth'), guest/forgot routes excluded from redirect
   api/client.ts        # Axios instance: auto Bearer token, 401 → redirect /login
-  api/*.ts             # Typed API functions (9 files, one per backend router group)
-  stores/              # Pinia stores: auth, task, project, work-item
-  layout/AppLayout.vue # Header nav with kanban/dashboard/work-weekly tabs + dark mode
+  api/*.ts             # Typed API functions (10 files, one per backend router group)
+  stores/              # Pinia stores: auth, task, project, work-item, scope
+  layout/AppLayout.vue # Header nav with kanban/dashboard/work-weekly tabs + dark mode + admin scope selector + avatar
   views/
-    LoginView.vue        # Login with centered card layout
+    LoginView.vue        # Login with centered card layout + "忘记密码" link
     RegisterView.vue     # Registration with centered card layout
-    KanbanView.vue       # Three-column drag-and-drop task board
+    ForgotPassword.vue   # Password reset request with email confirmation
+    ResetPassword.vue    # Reset password with token from email link
+    KanbanView.vue       # Three-column drag-and-drop task board + archive drawer
     DashboardView.vue    # Tabbed dashboard: Kanban stats + Work Weekly charts
-    WorkWeeklyView.vue   # Work weekly CRUD with week/month view toggle
+    WorkWeeklyView.vue   # Work weekly CRUD with week/month pill toggle + search + milestone progress
+    ProfileView.vue      # Personal settings: avatar crop upload, display name, password change
+    AdminUsers.vue       # Admin user management: search, role edit, enable/disable, password reset, delete
 ```
 
 - `@` alias maps to `./src` (configured in vite.config.ts)
@@ -82,7 +89,7 @@ frontend/src/
 
 | Table | Purpose |
 |-------|---------|
-| `users` | User accounts (email + bcrypt password) |
+| `users` | User accounts (email + bcrypt password, role, display_name, is_active, avatar_url) |
 | `tasks` | Simple kanban tasks (title, status, priority, order, tags) |
 | `projects` | Work-weekly projects (name, color) |
 | `work_items` | Unified task/work-order model, `type` field distinguishes |
@@ -96,35 +103,46 @@ Full schema: `backend/DATABASE_SCHEMA.md`
 
 | Prefix | Purpose |
 |--------|---------|
-| `/api/auth` | Login, register, get current user |
-| `/api/tasks` | Kanban task CRUD + reorder |
-| `/api/stats` | Kanban overview + 30-day trend |
-| `/api/projects` | Project CRUD |
-| `/api/work-items` | Work item CRUD + status change + tag/week/overdue filtering |
+| `/api/auth` | Login, register, get current user, forgot/reset password, avatar upload, profile update |
+| `/api/tasks` | Kanban task CRUD + reorder (supports `target_user_id`, `include_archived`) |
+| `/api/stats` | Kanban overview + 30-day trend (supports `target_user_id`) |
+| `/api/projects` | Project CRUD (user-scoped) |
+| `/api/work-items` | Work item CRUD + status change + tag/week/overdue/search filtering (supports `target_user_id`) |
 | `/api/work-logs` | Work log CRUD |
-| `/api/work-stats` | Weekly/monthly/trend/dashboard stats |
+| `/api/work-stats` | Weekly/monthly/trend/dashboard stats (supports `target_user_id` aggregation) |
 | `/api/milestones` | Milestone CRUD + reorder |
 | `/api/weekly-targets` | Weekly target hours CRUD |
+| `/api/admin` | Admin-only: user list/search/filter, update role/status, reset password, delete user |
 | `/api/health` | Health check |
 
 ## Key Business Rules
 
 1. **Drag to done**: Moving a WorkItem to `done` auto-creates a system WorkLog (`is_system=true`) + locked Milestone
-2. **Drag from done**: Moving out of `done` deletes the auto-created system logs and locked milestones
+2. **Drag from done**: Moving out of `done` detaches work_logs from locked milestones, deletes orphan system work_logs, then deletes locked milestones
 3. **Tags**: Stored as comma-separated TEXT in DB, returned as `string[]` by API (both tasks and work_items)
 4. **Work week target**: Default 40 hours/week (`WEEKLY_HOURS = 40` in `work_stats.py`), overridable per-week via `/api/weekly-targets`
 5. **Cross-week**: `WorkItem.is_cross_week` marks items spanning multiple weeks
 6. **Month view**: Uses range query (`week_start_from`/`week_start_to`) with `elif` for exclusive OR against exact `week_start`
+7. **Admin scope**: `target_user_id` — `0`/`null`=self, `-1`=all users, `>0`=specific user; stats aggregate across all users when `-1`
+8. **Archived tasks**: `status='archived'` excluded from stats/queries by default; `include_archived=true` to show
+9. **Avatar upload**: Canvas-based crop (320×320 crop area, drag to adjust) → 256×256 output, saved to `backend/static/avatars/`
+10. **Password reset**: JWT-based (type: `"password_reset"`, 15min expiry) + QQ SMTP HTML email
 
 ## Notable Patterns
 
 - Backend: `to_dict()` method on every model serializes dates/ISO strings, tags to arrays
 - Backend: Router responses use `SchemaResponse.model_validate(item.to_dict())` pattern
 - Backend: `WeeklyTarget` is a standalone model (not nested under other work models) — per-week target hours with unique constraint on `(week_start, user_id)`
-- Frontend: `types/index.ts` defines shared `STATUS_MAP`, `PRIORITY_MAP` and their `_OPTIONS` arrays used across views
+- Backend: `resolve_target_user(current_user, target_user_id)` returns `int | None` — `None` means "all users", raises 403 for non-admins
+- Backend: SQL Server doesn't support `func.date()` — use `cast(column, Date)` instead; multi-path CASCADE FKs removed (ORM-level only)
+- Backend: `CREATE DATABASE` on SQL Server requires `autocommit=True` via raw pyodbc
+- Frontend: `types/index.ts` defines shared `STATUS_MAP`, `PRIORITY_MAP`, `ROLE_MAP` and their `_OPTIONS` arrays used across views
 - Frontend: `formatDate()` uses `getFullYear()/getMonth()/getDate()` (local time), NOT `toISOString()`
 - Frontend: Month view uses `delete store.filters.week_start` + single range query, NOT per-week fetches
 - Frontend: Drag reactivity requires `items.value = [...items.value]` after in-place mutation
+- Frontend: Background glows on all authenticated pages via `.app-main { position: relative; z-index }` layers
+- Frontend: `scopeStore` persisted to localStorage, all stores inject `target_user_id` from scope when fetching
 - Pydantic: Field named `date` conflicts with `datetime.date` type — use `log_date` or `target_date` instead
-- TypeScript: `erasableSyntaxOnly` is enabled in `tsconfig.app.json` (TS 6.0 feature — only allows type annotations that can be erased at compile time)
+- TypeScript: `erasableSyntaxOnly` is enabled in `tsconfig.app.json` (TS 6.0 feature)
 - Auth: Login and Register are separate views with their own routes (`/login`, `/register`), both guarded with `{ guest: true }` meta
+- Auth: Forgot/reset password paths excluded from 401 redirect in `client.ts`
