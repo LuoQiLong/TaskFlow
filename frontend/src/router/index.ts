@@ -20,6 +20,18 @@ const router = createRouter({
       meta: { guest: true },
     },
     {
+      path: '/forgot-password',
+      name: 'ForgotPassword',
+      component: () => import('@/views/ForgotPassword.vue'),
+      meta: { guest: true },
+    },
+    {
+      path: '/reset-password',
+      name: 'ResetPassword',
+      component: () => import('@/views/ResetPassword.vue'),
+      meta: { guest: true },
+    },
+    {
       path: '/app',
       component: () => import('@/layout/AppLayout.vue'),
       meta: { requiresAuth: true },
@@ -27,6 +39,8 @@ const router = createRouter({
         { path: 'kanban', name: 'Kanban', component: () => import('@/views/KanbanView.vue') },
         { path: 'dashboard', name: 'Dashboard', component: () => import('@/views/DashboardView.vue') },
         { path: 'work-weekly', name: 'WorkWeekly', component: () => import('@/views/WorkWeeklyView.vue') },
+        { path: 'profile', name: 'Profile', component: () => import('@/views/ProfileView.vue') },
+        { path: 'admin/users', name: 'AdminUsers', component: () => import('@/views/AdminUsers.vue') },
       ],
     },
     {

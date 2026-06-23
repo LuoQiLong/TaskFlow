@@ -1,5 +1,5 @@
 <template>
-  <div style="padding:24px;background:var(--el-bg-color-page);min-height:100vh" v-loading="loading">
+  <div style="padding:24px;background:transparent;min-height:100vh" v-loading="loading">
     <el-tabs v-if="!loading" v-model="activeTab" class="dashboard-tabs">
       <el-tab-pane name="kanban">
         <template #label>
@@ -59,11 +59,11 @@
             <span style="font-size:22px;font-weight:700;color:var(--el-text-color-primary)">{{ dashYear }}年{{ dashMonth }}月</span>
             <span style="font-size:13px;color:var(--el-text-color-secondary)">工作周报统计</span>
           </div>
-          <div style="display:flex;align-items:center;gap:12px">
-            <el-radio-group v-model="quickMonth" @change="onQuickMonth">
-              <el-radio-button value="current">本月</el-radio-button>
-              <el-radio-button value="last">上月</el-radio-button>
-            </el-radio-group>
+          <div class="dash-month-nav">
+            <div class="view-toggle">
+              <button :class="['view-toggle-btn', { active: quickMonth === 'current' }]" @click="onQuickMonth('current')">本月</button>
+              <button :class="['view-toggle-btn', { active: quickMonth === 'last' }]" @click="onQuickMonth('last')">上月</button>
+            </div>
             <el-date-picker
               v-model="customMonth"
               type="month"
@@ -71,6 +71,7 @@
               format="YYYY-MM"
               value-format="YYYY-MM"
               @change="onCustomMonth"
+              class="dash-month-picker"
             />
           </div>
         </div>
@@ -85,9 +86,9 @@
             <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">任务工时</div>
             <div style="font-size:24px;font-weight:800;color:var(--el-color-success)">{{ dashData?.summary?.task_hours ?? 0 }}<span style="font-size:13px">h</span></div>
           </el-card>
-          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:var(--el-color-danger-light-9)">
+          <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:#fdf6ec">
             <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">工单工时</div>
-            <div style="font-size:24px;font-weight:800;color:var(--el-color-danger)">{{ dashData?.summary?.work_order_hours ?? 0 }}<span style="font-size:13px">h</span></div>
+            <div style="font-size:24px;font-weight:800;color:#e6a23c">{{ dashData?.summary?.work_order_hours ?? 0 }}<span style="font-size:13px">h</span></div>
           </el-card>
           <el-card shadow="hover" :body-style="{ padding:'20px', textAlign:'center' }" style="flex:1;border-radius:12px;border:none;background:var(--el-color-warning-light-9)">
             <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:4px">饱和度</div>
@@ -175,6 +176,10 @@ import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
 import { getOverviewStats, getTrendStats } from '@/api/stats'
 import { getDashboardStats, type DashboardStats } from '@/api/work-stats'
+import { useScopeStore } from '@/stores/scope'
+
+const scope = useScopeStore()
+function _dvScope(): number | undefined { return scope.targetUserId !== 0 ? scope.targetUserId : undefined }
 
 use([BarChart, PieChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent, CanvasRenderer])
 
@@ -202,6 +207,7 @@ function setMonth(y: number, m: number) {
 }
 
 function onQuickMonth(val: string) {
+  quickMonth.value = val
   customMonth.value = null
   if (val === 'current') {
     setMonth(now.getFullYear(), now.getMonth() + 1)
@@ -221,7 +227,7 @@ function onCustomMonth(val: string | null) {
 // ── Data fetching ──
 async function fetchKanban() {
   try {
-    const [ov, tr] = await Promise.all([getOverviewStats(), getTrendStats(30)])
+    const [ov, tr] = await Promise.all([getOverviewStats(_dvScope()), getTrendStats(30, _dvScope())])
     overview.value = ov
     trend.value = tr
   } catch {}
@@ -229,7 +235,7 @@ async function fetchKanban() {
 
 async function fetchDashboard() {
   try {
-    const d = await getDashboardStats(dashYear.value, dashMonth.value)
+    const d = await getDashboardStats(dashYear.value, dashMonth.value, _dvScope())
     dashData.value = d
   } catch {}
 }
@@ -357,7 +363,7 @@ const typePieOption = computed(() => {
   const tb = dashData.value?.type_breakdown
   const data = [
     { value: tb?.task_hours ?? 0, name: '任务', itemStyle: { color: '#6366f1' } },
-    { value: tb?.work_order_hours ?? 0, name: '工单', itemStyle: { color: '#f56c6c' } },
+    { value: tb?.work_order_hours ?? 0, name: '工单', itemStyle: { color: '#e6a23c' } },
   ]
   return {
     tooltip: { trigger: 'item', formatter: '{b}: {c}h ({d}%)' },
@@ -482,15 +488,15 @@ const weeklyStackOption = computed(() => {
         data: data.map(d => d.task_hours),
         itemStyle: { color: '#6366f1', borderRadius: 0 },
         barWidth: 40,
-        label: { show: true, position: 'inside', fontSize: 11, color: '#fff' },
+        label: { show: true, position: 'inside', fontSize: 11, color: '#fff', formatter: (p: any) => p.value > 0 ? p.value + 'h' : '' },
       },
       {
         name: '工单',
         type: 'bar',
         stack: 'total',
         data: data.map(d => d.work_order_hours),
-        itemStyle: { color: '#f56c6c', borderRadius: [6, 6, 0, 0] },
-        label: { show: true, position: 'inside', fontSize: 11, color: '#fff' },
+        itemStyle: { color: '#e6a23c', borderRadius: [6, 6, 0, 0] },
+        label: { show: true, position: 'inside', fontSize: 11, color: '#fff', formatter: (p: any) => p.value > 0 ? p.value + 'h' : '' },
       },
     ],
   }
@@ -543,5 +549,44 @@ const weeklyStackOption = computed(() => {
 .empty-hint {
   font-size: 12px;
   opacity: 0.7;
+}
+
+/* Month navigator */
+.dash-month-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
+  padding: 6px;
+}
+.view-toggle {
+  display: flex;
+  background: var(--el-fill-color-light);
+  border-radius: 10px;
+  padding: 3px;
+}
+.view-toggle-btn {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  transition: all 0.25s;
+  white-space: nowrap;
+}
+.view-toggle-btn:hover { color: var(--el-color-primary); }
+.view-toggle-btn.active {
+  background: var(--el-bg-color);
+  color: #6366f1;
+  box-shadow: var(--el-box-shadow-light);
+}
+.dash-month-picker :deep(.el-input__wrapper) {
+  border-radius: 10px;
+  box-shadow: none;
 }
 </style>

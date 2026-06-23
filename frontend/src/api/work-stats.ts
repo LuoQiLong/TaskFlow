@@ -36,14 +36,14 @@ export interface MonthlyStats {
   project_breakdown: { project_id: number; project_name: string; project_color: string; hours: number }[]
 }
 
-export const getWeeklyStats = (weekStart: string) =>
-  client.get<WeeklyStats>('/work-stats/weekly', { params: { week_start: weekStart } }).then(r => r.data)
+export const getWeeklyStats = (weekStart: string, targetUserId?: number) =>
+  client.get<WeeklyStats>('/work-stats/weekly', { params: { week_start: weekStart, ...(targetUserId !== undefined ? { target_user_id: targetUserId } : {}) } }).then(r => r.data)
 
-export const getTrendStats = (weeks: number = 12) =>
-  client.get<TrendPoint[]>('/work-stats/trend', { params: { weeks } }).then(r => r.data)
+export const getTrendStats = (weeks: number = 12, targetUserId?: number) =>
+  client.get<TrendPoint[]>('/work-stats/trend', { params: { weeks, ...(targetUserId !== undefined ? { target_user_id: targetUserId } : {}) } }).then(r => r.data)
 
-export const getMonthlyStats = (year: number, month: number) =>
-  client.get<MonthlyStats>('/work-stats/monthly', { params: { year, month } }).then(r => r.data)
+export const getMonthlyStats = (year: number, month: number, targetUserId?: number) =>
+  client.get<MonthlyStats>('/work-stats/monthly', { params: { year, month, ...(targetUserId !== undefined ? { target_user_id: targetUserId } : {}) } }).then(r => r.data)
 
 // ── Dashboard (comprehensive) ──
 
@@ -127,5 +127,5 @@ export interface DashboardStats {
   weekly_breakdown: WeeklyBreakdownPoint[]
 }
 
-export const getDashboardStats = (year: number, month: number) =>
-  client.get<DashboardStats>('/work-stats/dashboard', { params: { year, month } }).then(r => r.data)
+export const getDashboardStats = (year: number, month: number, targetUserId?: number) =>
+  client.get<DashboardStats>('/work-stats/dashboard', { params: { year, month, ...(targetUserId !== undefined ? { target_user_id: targetUserId } : {}) } }).then(r => r.data)

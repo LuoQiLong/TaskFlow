@@ -9,15 +9,19 @@ from sqlalchemy import func
 from ..database import get_db
 from ..models.work import WorkLog, WorkItem, Project, WeeklyTarget
 from ..models.user import User
-from ..middleware.auth import get_current_user
+from ..middleware.auth import get_current_user, resolve_target_user
 
 router = APIRouter(prefix="/api/work-stats", tags=["work-stats"])
 
 WEEKLY_HOURS = 40
 
 
-def _get_weekly_target(db: Session, user_id: int, week_start: date) -> tuple[float, bool]:
-    """Return (target_hours, is_custom) for a given week."""
+def _get_weekly_target(db: Session, user_id: int | None, week_start: date) -> tuple[float, bool]:
+    """Return (target_hours, is_custom) for a given week. user_id=None → aggregate all."""
+    if user_id is None:
+        # Aggregate: sum all custom targets for this week across all users
+        targets = db.query(WeeklyTarget).filter(WeeklyTarget.week_start == week_start).all()
+        return sum(t.target_hours for t in targets), len(targets) > 0
     target = (
         db.query(WeeklyTarget)
         .filter(
@@ -52,8 +56,8 @@ def _get_month_week_range(year: int, month: int) -> list[date]:
     return weeks
 
 
-def _build_saturation_trend(db: Session, user_id: int, weeks: int = 12, reference_date: date | None = None) -> list[dict]:
-    """Return weekly saturation trend for the last N weeks. Shared helper."""
+def _build_saturation_trend(db: Session, user_id: int | None, weeks: int = 12, reference_date: date | None = None) -> list[dict]:
+    """Return weekly saturation trend for the last N weeks. user_id=None → all users."""
     if reference_date is None:
         reference_date = date.today()
     current_week_start = _get_week_start(reference_date)
@@ -64,7 +68,7 @@ def _build_saturation_trend(db: Session, user_id: int, weeks: int = 12, referenc
         logged = (
             db.query(func.coalesce(func.sum(WorkLog.hours), 0))
             .filter(
-                WorkLog.user_id == user_id,
+                *([WorkLog.user_id == user_id] if user_id is not None else []),
                 WorkLog.week_start >= ws,
                 WorkLog.week_start <= week_end,
             )
@@ -72,14 +76,15 @@ def _build_saturation_trend(db: Session, user_id: int, weeks: int = 12, referenc
         ) or 0
         item_ids_with_logs = (
             db.query(WorkLog.work_item_id)
-            .filter(WorkLog.user_id == user_id, WorkLog.week_start >= ws, WorkLog.week_start <= week_end)
+            .filter(*([WorkLog.user_id == user_id] if user_id is not None else []),
+                    WorkLog.week_start >= ws, WorkLog.week_start <= week_end)
             .distinct()
             .subquery()
         )
         planned = (
             db.query(func.coalesce(func.sum(WorkItem.estimated_hours), 0))
             .filter(
-                WorkItem.user_id == user_id,
+                *([WorkItem.user_id == user_id] if user_id is not None else []),
                 WorkItem.week_start >= ws,
                 WorkItem.week_start <= week_end,
                 ~WorkItem.id.in_(db.query(item_ids_with_logs.c.work_item_id)),
@@ -102,26 +107,26 @@ def _build_saturation_trend(db: Session, user_id: int, weeks: int = 12, referenc
 @router.get("/weekly")
 def get_weekly_stats(
     week_start: str = Query(description="Monday date of the week, YYYY-MM-DD"),
+    target_user_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Return weekly saturation stats: total hours, task/work_order split, per-project breakdown."""
+    eff_user = resolve_target_user(current_user, target_user_id)
     ws = date.fromisoformat(week_start)
     week_end = ws + timedelta(days=6)
 
     # All work logs for this week (match by range, not exact Monday)
-    logs = (
-        db.query(WorkLog)
-        .filter(
-            WorkLog.user_id == current_user.id,
-            WorkLog.week_start >= ws,
-            WorkLog.week_start <= week_end,
-        )
-        .all()
+    log_query = db.query(WorkLog).filter(
+        WorkLog.week_start >= ws,
+        WorkLog.week_start <= week_end,
     )
+    if eff_user is not None:
+        log_query = log_query.filter(WorkLog.user_id == eff_user)
+    logs = log_query.all()
 
     total_hours = sum(log.hours for log in logs)
-    target_hours, is_custom = _get_weekly_target(db, current_user.id, ws)
+    target_hours, is_custom = _get_weekly_target(db, eff_user, ws)
     saturation_pct = round((total_hours / target_hours) * 100, 1) if target_hours > 0 else 0
 
     # Split by work item type (task vs work_order)
@@ -167,21 +172,25 @@ def get_weekly_stats(
 @router.get("/trend")
 def get_trend_stats(
     weeks: int = Query(default=12, ge=1, le=52),
+    target_user_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Return weekly hour totals for the last N weeks (by week_start), zero-filled."""
-    return _build_saturation_trend(db, current_user.id, weeks)
+    eff_user = resolve_target_user(current_user, target_user_id)
+    return _build_saturation_trend(db, eff_user, weeks)
 
 
 @router.get("/monthly")
 def get_monthly_stats(
     year: int = Query(ge=2020, le=2100),
     month: int = Query(ge=1, le=12),
+    target_user_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Return monthly saturation stats with weekly breakdown."""
+    eff_user = resolve_target_user(current_user, target_user_id)
     month_weeks = _get_month_week_range(year, month)
 
     # Weekly breakdown within the month
@@ -192,14 +201,10 @@ def get_monthly_stats(
     project_hours: dict[int, dict] = {}
 
     for ws in month_weeks:
-        logs = (
-            db.query(WorkLog)
-            .filter(
-                WorkLog.user_id == current_user.id,
-                WorkLog.week_start == ws,
-            )
-            .all()
-        )
+        log_q = db.query(WorkLog).filter(WorkLog.week_start == ws)
+        if eff_user is not None:
+            log_q = log_q.filter(WorkLog.user_id == eff_user)
+        logs = log_q.all()
         week_total = sum(log.hours for log in logs)
         month_total += week_total
 
@@ -259,32 +264,32 @@ def get_monthly_stats(
 def get_dashboard_stats(
     year: int = Query(ge=2020, le=2100),
     month: int = Query(ge=1, le=12),
+    target_user_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Return comprehensive dashboard stats: all charts in one call."""
+    eff_user = resolve_target_user(current_user, target_user_id)
     month_weeks = _get_month_week_range(year, month)
     if not month_weeks:
         month_weeks = [_get_week_start(date(year, month, 1))]
     num_weeks = len(month_weeks)
     monthly_target = 0.0
     for ws in month_weeks:
-        t, _ = _get_weekly_target(db, current_user.id, ws)
+        t, _ = _get_weekly_target(db, eff_user, ws)
         monthly_target += t
     num_days = calendar.monthrange(year, month)[1]
     first_ws = month_weeks[0]
     last_week_end = month_weeks[-1] + timedelta(days=6)
 
     # Fetch all logs for this month's weeks at once
-    logs = (
-        db.query(WorkLog)
-        .filter(
-            WorkLog.user_id == current_user.id,
-            WorkLog.week_start >= first_ws,
-            WorkLog.week_start <= last_week_end,
-        )
-        .all()
+    log_query = db.query(WorkLog).filter(
+        WorkLog.week_start >= first_ws,
+        WorkLog.week_start <= last_week_end,
     )
+    if eff_user is not None:
+        log_query = log_query.filter(WorkLog.user_id == eff_user)
+    logs = log_query.all()
 
     # Fetch all work items for the user (needed for type/tags lookup)
     item_ids = list(set(log.work_item_id for log in logs))

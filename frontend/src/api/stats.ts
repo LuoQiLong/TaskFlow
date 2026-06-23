@@ -7,8 +7,12 @@ export interface StatsOverview {
 }
 export interface TrendPoint { date: string; count: number }
 
-export const getOverviewStats = () =>
-  client.get<StatsOverview>('/stats/overview').then(r => r.data)
+export const getOverviewStats = (targetUserId?: number) =>
+  client.get<StatsOverview>('/stats/overview', {
+    params: { ...(targetUserId !== undefined ? { target_user_id: targetUserId } : {}) }
+  }).then(r => r.data)
 
-export const getTrendStats = (days = 30) =>
-  client.get<TrendPoint[]>('/stats/trend', { params: { days } }).then(r => r.data)
+export const getTrendStats = (days = 30, targetUserId?: number) =>
+  client.get<TrendPoint[]>('/stats/trend', {
+    params: { days, ...(targetUserId !== undefined ? { target_user_id: targetUserId } : {}) }
+  }).then(r => r.data)

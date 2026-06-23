@@ -6,7 +6,7 @@ from ..database import get_db
 from ..models.task import Task
 from ..models.user import User
 from ..schemas.task import TaskCreate, TaskUpdate, StatusUpdate, ReorderItem, TaskResponse
-from ..middleware.auth import get_current_user
+from ..middleware.auth import get_current_user, resolve_target_user
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -43,10 +43,14 @@ def get_tasks(
     include_archived: bool = False,
     sort_by: str = "created_at",
     sort_order: str = "desc",
+    target_user_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Task).filter(Task.user_id == current_user.id)
+    eff_user = resolve_target_user(current_user, target_user_id)
+    query = db.query(Task)
+    if eff_user is not None:
+        query = query.filter(Task.user_id == eff_user)
 
     # Default: exclude archived tasks from main view
     if not include_archived:

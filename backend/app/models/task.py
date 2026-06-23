@@ -26,7 +26,7 @@ class Task(Base):
     due_date = Column(DateTime, nullable=True)
     assignee = Column(String(100), nullable=True)
     tags = Column(Text, nullable=True)  # comma-separated tags
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 

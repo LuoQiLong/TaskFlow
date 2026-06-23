@@ -9,5 +9,10 @@ export const PRIORITY_MAP: Record<string, string> = {
   medium: '中优先级',
   high: '高优先级',
 }
+export const ROLE_MAP: Record<string, string> = {
+  admin: '管理员',
+  member: '普通用户',
+}
 export const STATUS_OPTIONS = Object.entries(STATUS_MAP).map(([v, l]) => ({ value: v, label: l }))
 export const PRIORITY_OPTIONS = Object.entries(PRIORITY_MAP).map(([v, l]) => ({ value: v, label: l }))
+export const ROLE_OPTIONS = Object.entries(ROLE_MAP).map(([v, l]) => ({ value: v, label: l }))

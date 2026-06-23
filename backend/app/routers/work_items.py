@@ -6,7 +6,7 @@ from ..database import get_db
 from ..models.work import WorkItem, WorkLog
 from ..models.user import User
 from ..schemas.work import WorkItemCreate, WorkItemUpdate, WorkItemStatusUpdate, WorkItemResponse
-from ..middleware.auth import get_current_user
+from ..middleware.auth import get_current_user, resolve_target_user
 from datetime import date, datetime
 
 router = APIRouter(prefix="/api/work-items", tags=["work-items"])
@@ -40,13 +40,22 @@ def list_work_items(
     week_start_to: str | None = None,
     tag: str | None = None,
     priority: str | None = None,
+    search: str | None = None,
     overdue: bool = False,
+    target_user_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     from datetime import datetime
-    query = db.query(WorkItem).filter(WorkItem.user_id == current_user.id)
+    from sqlalchemy import or_
+    eff_user = resolve_target_user(current_user, target_user_id)
+    query = db.query(WorkItem)
+    if eff_user is not None:
+        query = query.filter(WorkItem.user_id == eff_user)
 
+    if search:
+        kw = f"%{search}%"
+        query = query.filter(or_(WorkItem.title.ilike(kw), WorkItem.description.ilike(kw)))
     if project_id:
         query = query.filter(WorkItem.project_id == project_id)
     if type:
@@ -250,16 +259,28 @@ def update_work_item_status(
     # Auto-delete system work log + locked milestones when moved out of "done"
     if old_status == "done" and new_status != "done":
         from ..models.work import Milestone
-        # Delete locked milestones (their cascade will handle work logs)
-        db.query(Milestone).filter(
+        # Find locked milestones (auto-created by "drag to done")
+        locked_ms_ids = db.query(Milestone.id).filter(
             Milestone.work_item_id == item.id,
             Milestone.is_locked == True,
-        ).delete()
-        # Also delete non-milestone system logs
+        ).all()
+        locked_ms_ids = [r[0] for r in locked_ms_ids]
+        if locked_ms_ids:
+            # Detach work_logs from locked milestones, then delete orphans
+            db.query(WorkLog).filter(WorkLog.milestone_id.in_(locked_ms_ids)).update(
+                {WorkLog.milestone_id: None}, synchronize_session="fetch"
+            )
+        # Only delete orphan system work logs (linked to locked milestones or no milestone)
+        # Keep system work logs linked to user-created milestones
         db.query(WorkLog).filter(
             WorkLog.work_item_id == item.id,
             WorkLog.is_system == True,
             WorkLog.milestone_id == None,
+        ).delete()
+        # Now safe to delete locked milestones
+        db.query(Milestone).filter(
+            Milestone.work_item_id == item.id,
+            Milestone.is_locked == True,
         ).delete()
 
     db.commit()

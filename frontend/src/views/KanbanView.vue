@@ -1,5 +1,5 @@
 <template>
-  <div style="display:flex;flex-direction:column;height:calc(100vh - 64px);background:var(--el-bg-color-page)">
+  <div style="display:flex;flex-direction:column;height:calc(100vh - 64px);background:transparent">
     <!-- Toolbar -->
     <div class="search-toolbar" style="background:var(--el-bg-color);padding:20px 28px;border-bottom:1px solid var(--el-border-color-light);display:flex;gap:12px;align-items:center;flex-wrap:wrap">
       <el-input v-model="searchText" placeholder="搜索任务..." :prefix-icon="Search" clearable style="width:500px" size="large" @clear="searchText=''" @input="onSearch"/>

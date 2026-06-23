@@ -5,6 +5,7 @@ import {
   type WorkItem, type WorkItemCreate, type WorkItemFilters,
 } from '@/api/work-items'
 import { fetchWorkLogs, createWorkLog, updateWorkLog, deleteWorkLog, type WorkLog, type WorkLogCreate } from '@/api/work-logs'
+import { useScopeStore } from './scope'
 
 export const useWorkItemStore = defineStore('work-item', () => {
   const items = ref<WorkItem[]>([])
@@ -14,7 +15,10 @@ export const useWorkItemStore = defineStore('work-item', () => {
   async function fetch() {
     isLoading.value = true
     try {
-      items.value = await fetchWorkItems(filters.value)
+      const scope = useScopeStore()
+      const params = { ...filters.value }
+      if (scope.targetUserId !== 0) params.target_user_id = scope.targetUserId
+      items.value = await fetchWorkItems(params)
     } catch { /* handled by interceptor */ }
     finally { isLoading.value = false }
   }

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import * as tasksApi from '@/api/tasks'
 import type { Task, TaskCreate, TaskUpdate, StatusUpdate, ReorderItem, TaskFilters } from '@/api/tasks'
+import { useScopeStore } from './scope'
 
 export const useTaskStore = defineStore('task', () => {
   const tasks = ref<Task[]>([])
@@ -12,7 +13,10 @@ export const useTaskStore = defineStore('task', () => {
   async function fetchTasks() {
     isLoading.value = true; error.value = null
     try {
-      tasks.value = await tasksApi.fetchTasks(filters.value)
+      const scope = useScopeStore()
+      const params = { ...filters.value }
+      if (scope.targetUserId !== 0) params.target_user_id = scope.targetUserId
+      tasks.value = await tasksApi.fetchTasks(params)
     } catch {
       error.value = '无法加载任务'
     } finally { isLoading.value = false }

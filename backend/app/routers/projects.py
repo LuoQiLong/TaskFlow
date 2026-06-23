@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models.work import Project
 from ..models.user import User
 from ..schemas.work import ProjectCreate, ProjectUpdate, ProjectResponse
-from ..middleware.auth import get_current_user
+from ..middleware.auth import get_current_user, resolve_target_user
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -19,15 +19,15 @@ def _get_user_project(project_id: int, user_id: int, db: Session) -> Project:
 
 @router.get("", response_model=list[ProjectResponse])
 def list_projects(
+    target_user_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    projects = (
-        db.query(Project)
-        .filter(Project.user_id == current_user.id)
-        .order_by(Project.created_at.asc())
-        .all()
-    )
+    eff_user = resolve_target_user(current_user, target_user_id)
+    query = db.query(Project)
+    if eff_user is not None:
+        query = query.filter(Project.user_id == eff_user)
+    projects = query.order_by(Project.created_at.asc()).all()
     return projects
 
 

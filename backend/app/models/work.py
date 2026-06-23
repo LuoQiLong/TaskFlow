@@ -13,7 +13,7 @@ class Project(Base):
     name = Column(String(100), nullable=False)
     color = Column(String(20), nullable=False, default="#6366f1")
     description = Column(Text, nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.now)
 
     work_items = relationship("WorkItem", back_populates="project", cascade="all, delete-orphan")
@@ -37,7 +37,7 @@ class WorkItem(Base):
     __tablename__ = "work_items"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     type = Column(String(20), nullable=False, default="task")  # 'task' or 'work_order'
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
@@ -51,7 +51,7 @@ class WorkItem(Base):
     start_date = Column(DateTime, nullable=True)
     end_date = Column(DateTime, nullable=True)
     due_date = Column(DateTime, nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -94,14 +94,14 @@ class WorkLog(Base):
     __tablename__ = "work_logs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    work_item_id = Column(Integer, ForeignKey("work_items.id", ondelete="CASCADE"), nullable=False)
+    work_item_id = Column(Integer, ForeignKey("work_items.id"), nullable=False)
     week_start = Column(Date, nullable=False)
     hours = Column(Float, nullable=False)
     log_date = Column(Date, nullable=True)
     note = Column(Text, nullable=True)
     is_system = Column(Boolean, nullable=False, default=False)
-    milestone_id = Column(Integer, ForeignKey("milestones.id", ondelete="SET NULL"), nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    milestone_id = Column(Integer, ForeignKey("milestones.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.now)
 
     work_item = relationship("WorkItem", back_populates="work_logs")
@@ -129,7 +129,7 @@ class Milestone(Base):
     __tablename__ = "milestones"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    work_item_id = Column(Integer, ForeignKey("work_items.id", ondelete="CASCADE"), nullable=False)
+    work_item_id = Column(Integer, ForeignKey("work_items.id"), nullable=False)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     hours = Column(Float, nullable=True)
@@ -138,7 +138,7 @@ class Milestone(Base):
     completed_at = Column(DateTime, nullable=True)
     is_locked = Column(Boolean, nullable=False, default=False)
     sort_order = Column(Integer, nullable=False, default=0)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.now)
 
     __table_args__ = (
@@ -168,7 +168,7 @@ class WeeklyTarget(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     week_start = Column(Date, nullable=False)
     target_hours = Column(Float, nullable=False, default=40.0)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     __table_args__ = (
         Index("ix_weekly_targets_week_user", "week_start", "user_id", unique=True),

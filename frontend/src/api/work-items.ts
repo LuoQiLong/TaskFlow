@@ -67,7 +67,9 @@ export interface WorkItemFilters {
   week_start_to?: string
   tag?: string
   priority?: string
+  search?: string
   overdue?: boolean
+  target_user_id?: number
 }
 
 export const fetchWorkItems = (filters: WorkItemFilters = {}) =>

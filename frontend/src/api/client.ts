@@ -23,7 +23,7 @@ client.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem('auth')
       const path = window.location.pathname
-      if (path !== '/login' && path !== '/register') {
+      if (path !== '/login' && path !== '/register' && path !== '/forgot-password' && path !== '/reset-password') {
         window.location.href = '/login'
       }
     }

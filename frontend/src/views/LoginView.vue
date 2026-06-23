@@ -44,6 +44,9 @@
           style="width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;border-radius:10px;height:44px;font-size:15px;font-weight:600">
           登 录
         </el-button>
+        <div style="text-align:right;margin-top:12px">
+          <el-button link type="primary" @click="router.push('/forgot-password')">忘记密码？</el-button>
+        </div>
       </el-form>
 
       <!-- Register -->

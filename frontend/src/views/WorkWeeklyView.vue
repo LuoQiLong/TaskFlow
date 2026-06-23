@@ -1,19 +1,29 @@
 <template>
-  <div style="display:flex;flex-direction:column;height:calc(100vh - 64px);background:var(--el-bg-color-page)">
+  <div style="display:flex;flex-direction:column;height:calc(100vh - 64px);background:transparent">
     <!-- Top Toolbar -->
     <div class="ww-toolbar" style="background:var(--el-bg-color);padding:16px 28px;border-bottom:1px solid var(--el-border-color-light);display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-      <!-- Week/Month toggle -->
-      <el-radio-group v-model="viewMode" size="large" @change="onViewModeChange">
-        <el-radio-button value="week">周视图</el-radio-button>
-        <el-radio-button value="month">月视图</el-radio-button>
-      </el-radio-group>
-
-      <!-- Period navigator -->
-      <div style="display:flex;align-items:center;gap:4px">
-        <el-button circle size="large" @click="prevPeriod"><el-icon><ArrowLeft /></el-icon></el-button>
-        <span style="font-size:15px;font-weight:700;min-width:180px;text-align:center;color:var(--el-text-color-primary)">{{ periodLabel }}</span>
-        <el-button circle size="large" @click="nextPeriod"><el-icon><ArrowRight /></el-icon></el-button>
+      <!-- Period navigator & view toggle -->
+      <div class="period-nav">
+        <button class="period-nav-btn" @click="prevPeriod">
+          <el-icon size="18"><ArrowLeft /></el-icon>
+        </button>
+        <span class="period-nav-label">{{ periodLabel }}</span>
+        <button class="period-nav-btn" @click="nextPeriod">
+          <el-icon size="18"><ArrowRight /></el-icon>
+        </button>
+        <div class="view-toggle">
+          <button :class="['view-toggle-btn', { active: viewMode === 'week' }]" @click="viewMode='week'; onViewModeChange()">
+            📆 周
+          </button>
+          <button :class="['view-toggle-btn', { active: viewMode === 'month' }]" @click="viewMode='month'; onViewModeChange()">
+            📅 月
+          </button>
+        </div>
       </div>
+
+      <!-- Search -->
+      <el-input v-model="searchFilter" placeholder="搜索任务..." clearable size="large" style="width:200px"
+        :prefix-icon="Search" @input="onSearchChange"/>
 
       <!-- Project filter -->
       <el-select v-model="projectFilter" placeholder="全部项目" clearable size="large" style="width:150px" @change="onProjectFilterChange">
@@ -211,9 +221,9 @@
           </el-col>
           <el-col :span="12">
             <el-card shadow="hover" :body-style="{ padding:'16px', textAlign:'center' }"
-              style="background:var(--el-color-danger-light-9);border:none;border-radius:12px">
-              <div style="font-size:24px;font-weight:800;color:var(--el-color-danger)">{{ currentStats?.work_order_hours || 0 }}h</div>
-              <div style="font-size:12px;color:var(--el-color-danger);margin-top:2px;font-weight:600">🔧 工单工时</div>
+              style="background:#fdf6ec;border:none;border-radius:12px">
+              <div style="font-size:24px;font-weight:800;color:#e6a23c">{{ currentStats?.work_order_hours || 0 }}h</div>
+              <div style="font-size:12px;color:#e6a23c;margin-top:2px;font-weight:600">🔧 工单工时</div>
             </el-card>
           </el-col>
         </el-row>
@@ -345,7 +355,7 @@
           <!-- Progress bar in gray block -->
           <div style="background:var(--el-fill-color-light);border-radius:8px;padding:14px 16px;margin-bottom:12px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <span style="font-size:14px;font-weight:700;color:var(--el-text-color-primary)">🏔️ 里程碑进度</span>
+              <span style="font-size:14px;font-weight:700;color:var(--el-text-color-primary)">🚩 里程碑进度</span>
               <span v-if="milestones.length" style="font-size:12px;color:var(--el-text-color-secondary);font-weight:600">{{ milestones.filter(m=>m.is_completed).length }}/{{ milestones.length }}</span>
             </div>
             <el-progress v-if="milestones.length" :percentage="milestoneProgress" :color="progressColor" :stroke-width="12" striped striped-flow/>
@@ -488,6 +498,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
 import { useProjectStore } from '@/stores/project'
 import { useWorkItemStore } from '@/stores/work-item'
+import { useScopeStore } from '@/stores/scope'
 import type { WorkItem } from '@/api/work-items'
 import { fetchWorkItems } from '@/api/work-items'
 import { getWeeklyStats, getTrendStats, getMonthlyStats, type WeeklyStats, type TrendPoint, type MonthlyStats } from '@/api/work-stats'
@@ -502,6 +513,7 @@ use([BarChart, PieChart, LineChart, TitleComponent, TooltipComponent, LegendComp
 const projectStore = useProjectStore()
 const chart = useChartTheme()
 const store = useWorkItemStore()
+const scope = useScopeStore()
 
 const priorityOptions = PRIORITY_OPTIONS
 const statusOptions = STATUS_OPTIONS
@@ -624,6 +636,10 @@ const allTags = computed(() => {
   store.items.forEach(item => (item.tags || []).forEach(t => set.add(t)))
   return Array.from(set).sort()
 })
+const searchFilter = ref('')
+function onSearchChange() {
+  store.setFilter('search', searchFilter.value || undefined)
+}
 const overdueFilter = ref(false)
 function onOverdueFilterChange(val: boolean) {
   store.setFilter('overdue', val || undefined)
@@ -639,6 +655,13 @@ const sortBy = ref('')
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
 
 function onSortChange() {} // triggers computed re-eval via sortBy ref
+
+function _scopeParam(): { target_user_id?: number } {
+  return scope.targetUserId !== 0 ? { target_user_id: scope.targetUserId } : {}
+}
+function _scopeVal(): number | undefined {
+  return scope.targetUserId !== 0 ? scope.targetUserId : undefined
+}
 
 // ── Weekday filter ──
 const weekdayFilter = ref('')
@@ -1118,7 +1141,7 @@ async function fetchMonthItems() {
   const from = formatDate(getMonday(firstDay))
   const to = formatDate(lastDay)
   // Single range query — no blink
-  store.items = await fetchWorkItems({ ...store.filters, week_start_from: from, week_start_to: to })
+  store.items = await fetchWorkItems({ ...store.filters, week_start_from: from, week_start_to: to, ..._scopeParam() })
 }
 
 // ── Stats ──
@@ -1127,12 +1150,12 @@ const trendData = ref<TrendPoint[]>([])
 
 async function fetchStats() {
   if (viewMode.value === 'week') {
-    currentStats.value = await getWeeklyStats(formatDate(currentWeekStart.value))
+    currentStats.value = await getWeeklyStats(formatDate(currentWeekStart.value), _scopeVal())
   } else {
-    currentStats.value = await getMonthlyStats(currentMonth.value.year, currentMonth.value.month)
+    currentStats.value = await getMonthlyStats(currentMonth.value.year, currentMonth.value.month, _scopeVal())
   }
 }
-async function fetchTrend() { trendData.value = await getTrendStats(12) }
+async function fetchTrend() { trendData.value = await getTrendStats(12, _scopeVal()) }
 function refreshStats() { fetchStats() }
 
 // ── Export ──
@@ -1304,6 +1327,63 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* Period navigator */
+.period-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.period-nav-btn {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+  color: var(--el-text-color-regular);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.period-nav-btn:hover {
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+.period-nav-label {
+  font-size: 15px; font-weight: 700;
+  min-width: 200px; text-align: center;
+  color: var(--el-text-color-primary);
+  padding: 0 6px;
+}
+
+/* View toggle */
+.view-toggle {
+  display: flex;
+  background: var(--el-fill-color-light);
+  border-radius: 10px;
+  padding: 3px;
+  margin-left: 12px;
+}
+.view-toggle-btn {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  transition: all 0.25s;
+  white-space: nowrap;
+}
+.view-toggle-btn:hover {
+  color: var(--el-color-primary);
+}
+.view-toggle-btn.active {
+  background: var(--el-bg-color);
+  color: #6366f1;
+  box-shadow: var(--el-box-shadow-light);
+}
+
 .ww-toolbar :deep(.el-input__wrapper),
 .ww-toolbar :deep(.el-select__wrapper) {
   border-radius: 8px;
