@@ -9,10 +9,10 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
 # Database — SQL Server
 import urllib.parse
 
-DB_HOST = os.getenv("TASKFLOW_DB_HOST", "10.128.30.82,20001")
+DB_HOST = os.getenv("TASKFLOW_DB_HOST", "localhost")
 DB_PORT = os.getenv("TASKFLOW_DB_PORT", "")
-DB_USER = os.getenv("TASKFLOW_DB_USER", "staadmin")
-DB_PASSWORD = os.getenv("TASKFLOW_DB_PASSWORD", "Ska3686Kb*i9")
+DB_USER = os.getenv("TASKFLOW_DB_USER", "")
+DB_PASSWORD = os.getenv("TASKFLOW_DB_PASSWORD", "")
 DB_NAME = os.getenv("TASKFLOW_DB_NAME", "taskflow")
 DB_DRIVER = os.getenv("TASKFLOW_DB_DRIVER", "ODBC Driver 17 for SQL Server")
 
@@ -29,8 +29,8 @@ DATABASE_URL = _build_url(DB_NAME)
 # SMTP email config (QQ邮箱)
 SMTP_HOST = os.getenv("TASKFLOW_SMTP_HOST", "smtp.qq.com")
 SMTP_PORT = int(os.getenv("TASKFLOW_SMTP_PORT", "587"))
-SMTP_USER = os.getenv("TASKFLOW_SMTP_USER", "2297928004@qq.com")
-SMTP_PASSWORD = os.getenv("TASKFLOW_SMTP_PASSWORD", "yunergnxljcjecih")
+SMTP_USER = os.getenv("TASKFLOW_SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("TASKFLOW_SMTP_PASSWORD", "")
 SMTP_FROM_NAME = os.getenv("TASKFLOW_SMTP_FROM_NAME", "TaskFlow")
 
 # CORS

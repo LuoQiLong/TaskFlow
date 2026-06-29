@@ -32,7 +32,7 @@ Backend Swagger docs: `http://localhost:8000/docs`
 
 Environment variables (optional, with defaults in `backend/app/config.py`):
 - `TASKFLOW_SECRET_KEY` — JWT signing key (default: dev key, **change in production**)
-- `TASKFLOW_DB_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_NAME` / `_DRIVER` — SQL Server connection (defaults: `LQL`, empty port, `sa`, `123`, `taskflow`, `ODBC Driver 18 for SQL Server`). The code does NOT read `TASKFLOW_DATABASE_URL` — it always builds a `mssql+pyodbc` URL from the individual params. Note: `.env.example` incorrectly references `TASKFLOW_DATABASE_URL` (SQLite fallback) — this is not honored by `config.py`.
+- `TASKFLOW_DB_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_NAME` / `_DRIVER` — SQL Server connection. Defaults are empty/insecure — set them in `.env` before running. Note: the code always builds a `mssql+pyodbc` URL from individual params; `TASKFLOW_DATABASE_URL` is NOT read.
 - `TASKFLOW_SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` — QQ SMTP for password reset emails
 
 ## Architecture
