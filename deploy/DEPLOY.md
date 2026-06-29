@@ -76,8 +76,10 @@ cp deploy/linux/.env.production .env
 # ★ 按实际修改：
 #   TASKFLOW_DB_HOST=你的SQLServer地址
 #   TASKFLOW_DB_PASSWORD=你的数据库密码
-#   TASKFLOW_CORS_ORIGINS=http://你的Windows前端IP
+#   TASKFLOW_CORS_ORIGINS=http://你的Windows前端IP,http://你的域名
 ```
+
+> ⚠️ **CORS 必须填对**：`TASKFLOW_CORS_ORIGINS` 要填写用户浏览器访问前端的地址（如 `http://10.128.30.x` 或 `http://taskflow.xxx.com`），填错会导致浏览器报跨域错误，页面无法调用后端 API。
 
 ### 1.5 安装 systemd 服务
 
@@ -103,9 +105,63 @@ sudo firewall-cmd --reload
 sudo iptables -A INPUT -p tcp --dport 8000 -j ACCEPT
 ```
 
+### 1.7 创建首个管理员账号
+
+数据库初始为空，注册的第一个账号只是普通成员，需要手动创建管理员：
+
+```bash
+# 在 Linux 后端服务器上执行
+cd /opt/taskflow/backend
+source venv/bin/activate
+python
+```
+
+```python
+# 在 Python REPL 中执行
+from app.utils.security import hash_password
+from app.database import SessionLocal
+from app.models.user import User
+from datetime import datetime
+
+db = SessionLocal()
+
+# 检查是否已有管理员
+admin = db.query(User).filter(User.role == "admin").first()
+if not admin:
+    admin = User(
+        email="你的邮箱@xxx.com",       # 改为实际邮箱
+        hashed_password=hash_password("你的密码"),  # 改为实际密码
+        role="admin",
+        display_name="管理员",
+        is_active=True,
+        created_at=datetime.now(),
+    )
+    db.add(admin)
+    db.commit()
+    print("管理员账号已创建")
+else:
+    print(f"管理员已存在: {admin.email}")
+
+db.close()
+```
+
+注册页面无管理员入口，确保至少有一个管理员账号后再开放使用。
+
+### 1.8 验证后端启动
+
+```bash
+# 确保能连上 SQL Server
+cd /opt/taskflow/backend
+source venv/bin/activate
+python -c "from app.database import engine; engine.connect(); print('数据库连接成功')"
+```
+
 ---
 
 ## 二、Windows 前端部署
+
+> ⚠️ **前提**：确保 Windows 服务器能访问 Linux 后端的 8000 端口。
+> 在 Windows 的 PowerShell 中测试：`Test-NetConnection Linux服务器IP -Port 8000`
 
 ### 2.1 构建前端
 
@@ -206,3 +262,14 @@ curl http://Linux服务器IP:8000/api/health
 4. **HTTPS**：生产环境建议配置 SSL 证书（可通过 IIS 绑定或反向代理）
 
 5. **防火墙**：Linux 后端 8000 端口仅允许 Windows 前端访问，不对外暴露
+6. **Git 仓库**：如果仓库是私有的，Linux 服务器 `git clone` 前需要配置凭证
+   ```bash
+   # 方式一：Personal Access Token
+   git clone https://你的用户名:你的Token@github.com/LuoQiLong/TaskFlow.git
+   
+   # 方式二：SSH Key
+   ssh-keygen -t ed25519 -C "你的邮箱"
+   cat ~/.ssh/id_ed25519.pub  # 把公钥添加到 GitHub Settings → SSH Keys
+   git clone git@github.com:LuoQiLong/TaskFlow.git
+   ```
+7. **代码部署方式**：生产环境建议只部署 `backend/` 和前端 `dist/` 产物，不要整仓库克隆到服务器的公开目录，避免 `.git/` 目录被外部访问。
