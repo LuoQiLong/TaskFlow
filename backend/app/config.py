@@ -1,5 +1,19 @@
 import os
 from datetime import timedelta
+from pathlib import Path
+
+# Load .env file (if it exists)
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    with open(_env_path, encoding="utf-8") as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _key, _val = _line.split("=", 1)
+                _key = _key.strip()
+                _val = _val.strip().strip('"').strip("'")
+                if _key and _key not in os.environ:
+                    os.environ[_key] = _val
 
 # JWT settings
 SECRET_KEY = os.getenv("TASKFLOW_SECRET_KEY", "taskflow-dev-key-change-in-production")
