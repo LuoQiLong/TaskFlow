@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 
 from sqlalchemy import Column, Integer, String, Text, Float, Boolean, Date, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
@@ -46,11 +47,15 @@ class WorkItem(Base):
     estimated_hours = Column(Float, nullable=True)
     week_start = Column(Date, nullable=False)  # Monday of the week this item belongs to
     is_cross_week = Column(Boolean, nullable=False, default=False)
+    week_end = Column(Date, nullable=True)  # end Monday for cross-week items
+    week_hours = Column(Text, nullable=True)  # JSON: {"2026-06-22": 5, "2026-06-29": 15}
+    completed_weeks = Column(Text, nullable=True)  # JSON: ["2026-06-22", "2026-06-29"]
     tags = Column(Text, nullable=True)  # comma-separated
     column_order = Column(Integer, nullable=False, default=0)
     start_date = Column(DateTime, nullable=True)
     end_date = Column(DateTime, nullable=True)
     due_date = Column(DateTime, nullable=True)
+    attachments = Column(Text, nullable=True)  # JSON array [{name, url, size}]
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
@@ -68,6 +73,8 @@ class WorkItem(Base):
     )
 
     def to_dict(self):
+        wh = json.loads(self.week_hours) if self.week_hours else None
+        num_weeks = len(wh) if wh else 1
         return {
             "id": self.id,
             "project_id": self.project_id,
@@ -78,16 +85,29 @@ class WorkItem(Base):
             "priority": self.priority,
             "estimated_hours": self.estimated_hours,
             "week_start": self.week_start.isoformat() if self.week_start else None,
-            "is_cross_week": self.is_cross_week,
+            "week_end": self.week_end.isoformat() if self.week_end else None,
+            "is_cross_week": bool(self.week_end and self.week_end > self.week_start),
+            "week_hours": wh,
+            "completed_weeks": json.loads(self.completed_weeks) if self.completed_weeks else [],
+            "num_weeks": num_weeks,
             "tags": [t.strip() for t in self.tags.split(",") if t.strip()] if self.tags else [],
             "column_order": self.column_order,
             "start_date": self.start_date.isoformat() if self.start_date else None,
             "end_date": self.end_date.isoformat() if self.end_date else None,
             "due_date": self.due_date.isoformat() if self.due_date else None,
+            "attachments": json.loads(self.attachments) if self.attachments else [],
             "user_id": self.user_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+    def get_hours_for_week(self, ws) -> float:
+        """Return allocated hours for a given week_start date."""
+        wh = json.loads(self.week_hours) if self.week_hours else None
+        if not wh:
+            return self.estimated_hours or 0
+        key = ws.isoformat() if hasattr(ws, 'isoformat') else str(ws)
+        return float(wh.get(key, 0))
 
 
 class WorkLog(Base):
@@ -137,6 +157,7 @@ class Milestone(Base):
     is_completed = Column(Boolean, nullable=False, default=False)
     completed_at = Column(DateTime, nullable=True)
     is_locked = Column(Boolean, nullable=False, default=False)
+    week_start = Column(Date, nullable=True)  # for cross-week: which week this manual milestone belongs to
     sort_order = Column(Integer, nullable=False, default=0)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.now)
@@ -156,6 +177,7 @@ class Milestone(Base):
             "is_completed": self.is_completed,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "is_locked": self.is_locked,
+            "week_start": self.week_start.isoformat() if self.week_start else None,
             "sort_order": self.sort_order,
             "user_id": self.user_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,

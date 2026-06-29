@@ -44,9 +44,12 @@
 
       <!-- Priority filter -->
       <el-select v-model="priorityFilter" placeholder="全部优先级" clearable size="large" style="width:140px" @change="onPriorityFilterChange">
-        <el-option label="🔴 高" value="high"/>
-        <el-option label="🟡 中" value="medium"/>
-        <el-option label="🟢 低" value="low"/>
+        <el-option v-for="o in priorityFilterOptions" :key="o.value" :value="o.value">
+          <span style="display:flex;align-items:center;gap:6px">
+            <span :style="{width:'10px',height:'10px',borderRadius:'50%',background:o.dotColor,flexShrink:0}"/>
+            {{ o.label }}
+          </span>
+        </el-option>
       </el-select>
 
       <!-- Sort -->
@@ -105,7 +108,7 @@
                 :style="{flex:1,background:col.bg,borderRadius:'12px',padding:'12px',minHeight:'80px',border:'1px solid var(--el-border-color-light)'}"
                 @dragover.prevent @drop="onDrop($event, col.key, group)">
                 <div style="font-size:12px;font-weight:600;color:var(--el-text-color-secondary);margin-bottom:8px;text-align:center">{{ col.label }}</div>
-                <div v-for="(item, idx) in group.items.filter(i => i.status === col.key)" :key="item.id"
+                <div v-for="(item, idx) in group.items.filter(i => getItemCol(i) === col.key)" :key="item.id"
                   draggable="true"
                   @dragstart="onDragStart($event, item)"
                   @dragover="onDragOver($event, idx)"
@@ -123,16 +126,22 @@
                     <span :style="{fontSize:'11px',padding:'0 6px',borderRadius:'4px',fontWeight:600,background:priorityBg(item.priority),color:priorityColor(item.priority),border:`1px solid ${priorityColor(item.priority)}`}">{{ priorityMap[item.priority] }}</span>
                     <span v-if="isOverdue(item)" style="font-size:10px;padding:0 6px;borderRadius:'4px';fontWeight:600;background:var(--el-color-danger-light-9);color:var(--el-color-danger);border:1px solid var(--el-color-danger)">⏰ 已超期</span>
                   </div>
-                  <div style="font-size:13px;font-weight:600;color:var(--el-text-color-primary);margin-bottom:4px;line-height:1.4">{{ item.title }}</div>
+                  <div style="font-size:13px;font-weight:600;color:var(--el-text-color-primary);margin-bottom:4px;line-height:1.4">
+                    <span v-if="item.is_cross_week" style="display:inline-block;font-size:10px;padding:0 5px;margin-right:4px;border-radius:4px;background:var(--el-color-success-light-9);color:var(--el-color-success);border:1px solid var(--el-color-success-light-5);vertical-align:middle;white-space:nowrap">🔁 {{ item.num_weeks }}周</span>
+                    <span v-if="item.is_cross_week && item.week_hours" style="display:inline-flex;gap:2px;flex-wrap:wrap;vertical-align:middle">
+                      <span v-for="(h, wk) in item.week_hours" :key="wk" style="font-size:9px;padding:0 3px;border-radius:3px;vertical-align:middle;white-space:nowrap" :style="{background:(item.completed_weeks||[]).includes(wk)?'var(--el-color-success-light-9)':'var(--el-fill-color-light)',color:(item.completed_weeks||[]).includes(wk)?'var(--el-color-success)':'var(--el-text-color-placeholder)'}">{{ wk.slice(5) }} {{ (item.completed_weeks||[]).includes(wk) ? '✅' : '⏳' }}</span>
+                    </span>
+                    {{ item.title }}
+                  </div>
                   <!-- Tags row -->
                   <div v-if="(item.tags||[]).length" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">
                     <span v-for="t in (item.tags||[])" :key="t" style="background:var(--el-color-primary-light-9);color:var(--el-color-primary);font-size:11px;padding:1px 8px;border-radius:6px;font-weight:500">#{{ t }}</span>
                   </div>
                   <!-- Hours bar -->
-                  <div v-if="item.estimated_hours" style="margin-top:4px">
+                  <div v-if="displayItemHours(item) > 0" style="margin-top:4px">
                     <div style="display:flex;align-items:center;gap:6px">
                       <div style="flex:1;height:6px;background:var(--el-fill-color-light);border-radius:3px;overflow:hidden">
-                        <div :style="{width:Math.min(100,(getItemHours(item.id)/item.estimated_hours)*100)+'%',height:'100%',borderRadius:'3px',background:getItemHours(item.id)/item.estimated_hours>=1?'#67c23a':'#6366f1',transition:'width 0.3s'}"/>
+                        <div :style="{width:Math.min(100,getItemHours(item.id)/Math.max(0.01,(item.estimated_hours||1))*100)+'%',height:'100%',borderRadius:'3px',background:getItemHours(item.id)/(item.estimated_hours||1)>=1?'#67c23a':'#6366f1',transition:'width 0.3s'}"/>
                       </div>
                       <span style="font-size:11px;color:var(--el-text-color-secondary);white-space:nowrap">{{ getItemHours(item.id) }}h / {{ item.estimated_hours }}h</span>
                     </div>
@@ -147,7 +156,7 @@
                     </span>
                   </div>
                 </div>
-                <div v-if="group.items.filter(i => i.status === col.key).length===0" style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--el-text-color-placeholder);font-size:13px;padding:20px 16px;gap:6px">
+                <div v-if="group.items.filter(i => getItemCol(i) === col.key).length===0" style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--el-text-color-placeholder);font-size:13px;padding:20px 16px;gap:6px">
                   <span style="font-size:28px;opacity:0.5">{{ col.emptyIcon }}</span>
                   <span>暂无任务</span>
                   <span style="font-size:11px;opacity:0.7">拖拽或新建添加</span>
@@ -260,7 +269,7 @@
     </div>
 
     <!-- WorkItem Dialog -->
-    <el-dialog v-model="dialogVisible" width="640px" destroy-on-close class="ww-dialog">
+    <el-dialog v-model="dialogVisible" width="1000px" destroy-on-close class="ww-dialog">
       <template #header>
         <div style="display:flex;align-items:center;gap:10px">
           <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center">
@@ -307,7 +316,70 @@
         </el-row>
         <el-form-item>
           <template #label><span style="display:flex;align-items:center;gap:4px"><el-icon><Document/></el-icon> 描述</span></template>
-          <el-input v-model="itemForm.description" type="textarea" :rows="3" placeholder="描述（可选）" size="large"/>
+          <TiptapEditor ref="editorRef" v-model="itemForm.description" />
+        </el-form-item>
+        <!-- Attachments -->
+        <el-form-item>
+          <template #label><span style="display:flex;align-items:center;gap:4px"><el-icon><Paperclip/></el-icon> 附件</span></template>
+          <div style="width:100%">
+            <!-- File list -->
+            <div v-if="itemForm.attachments.length" style="border:1px solid var(--el-border-color-lighter);border-radius:6px;overflow:hidden;margin-bottom:8px">
+              <div v-for="(att, idx) in itemForm.attachments" :key="att.url" style="display:flex;align-items:center;padding:6px 10px;gap:8px;border-bottom:1px solid var(--el-border-color-lighter);font-size:13px" :style="{background: idx%2===0?'var(--el-fill-color-lighter)':'var(--el-fill-color-blank)'}">
+                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--el-text-color-primary);cursor:pointer" @click="openAttach(att.url)" :title="att.name">{{ att.name }}</span>
+                <span style="color:var(--el-text-color-placeholder);font-size:11px;white-space:nowrap">{{ formatFileSize(att.size) }}</span>
+                <el-button type="danger" link size="small" @click="removeAttach(idx)"><el-icon><Delete/></el-icon></el-button>
+              </div>
+            </div>
+            <!-- Drop zone -->
+            <div
+              class="attach-drop-zone"
+              :class="{ 'attach-dragover': attachDragover }"
+              @click="attachInput?.click()"
+              @dragover.prevent="attachDragover = true"
+              @dragleave="attachDragover = false"
+              @drop.prevent="handleAttachDrop"
+            >
+              <el-icon :size="22"><Upload/></el-icon>
+              <span>拖拽文件到此处，或点击上传</span>
+              <input ref="attachInput" type="file" style="display:none" @change="handleAttachPick" multiple />
+            </div>
+          </div>
+        </el-form-item>
+        <!-- Cross-week -->
+        <el-form-item>
+          <template #label><span style="display:flex;align-items:center;gap:4px"><el-icon><RefreshRight/></el-icon> 跨周设置</span></template>
+          <div style="width:100%">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+              <el-switch v-model="crossWeekEnabled" active-text="跨周任务" inactive-text="" size="large" />
+              <span v-if="crossWeekEnabled" style="font-size:12px;color:var(--el-text-color-secondary)">
+                跨度 {{ weekList.length }} 周，预估工时由各周之和自动计算
+              </span>
+            </div>
+            <template v-if="crossWeekEnabled">
+              <el-row :gutter="12" style="margin-bottom:12px">
+                <el-col :span="12">
+                  <span style="font-size:12px;color:var(--el-text-color-secondary);margin-bottom:4px;display:block">起始周（周一）</span>
+                  <el-date-picker v-model="crossWeekStart" type="date" placeholder="起始周一" style="width:100%" size="large" format="YYYY-MM-DD" value-format="YYYY-MM-DD" :disabled-date="disableNonMonday" @change="rebuildWeekHours" />
+                </el-col>
+                <el-col :span="12">
+                  <span style="font-size:12px;color:var(--el-text-color-secondary);margin-bottom:4px;display:block">截止周（周一）</span>
+                  <el-date-picker v-model="crossWeekEnd" type="date" placeholder="截止周一" style="width:100%" size="large" format="YYYY-MM-DD" value-format="YYYY-MM-DD" :disabled-date="disableNonMonday" @change="rebuildWeekHours" />
+                </el-col>
+              </el-row>
+              <!-- Weekly hour allocation -->
+              <div v-if="weekList.length > 0" style="border:1px solid var(--el-border-color-lighter);border-radius:8px;overflow:hidden">
+                <div v-for="(w, idx) in weekList" :key="w.key" style="display:flex;align-items:center;padding:6px 12px;gap:10px;border-bottom:1px solid var(--el-border-color-lighter);font-size:13px" :style="{background:idx%2===0?'var(--el-fill-color-lighter)':'var(--el-fill-color-blank)'}">
+                  <span style="width:100px;flex-shrink:0;color:var(--el-text-color-regular);font-weight:500;font-size:12px">{{ getWeekLabel(w.key) }}</span>
+                  <el-input-number v-model="w.hours" :min="0" :step="0.5" :precision="1" size="large" style="flex:1" controls-position="right" @change="syncWeekHours" />
+                  <span style="color:var(--el-text-color-placeholder);font-size:13px;width:20px;text-align:center;flex-shrink:0">h</span>
+                </div>
+                <div style="display:flex;align-items:center;padding:6px 12px;gap:10px;font-size:13px;font-weight:600;background:var(--el-fill-color-light)">
+                  <span style="width:110px;flex-shrink:0;color:var(--el-text-color-primary)">预估总工时</span>
+                  <span style="flex:1;color:var(--el-color-primary)">{{ weekList.reduce((s,w)=>s+(w.hours||0),0).toFixed(1) }} h</span>
+                </div>
+              </div>
+            </template>
+          </div>
         </el-form-item>
         <el-row :gutter="16">
           <el-col :span="12">
@@ -319,7 +391,7 @@
           <el-col :span="12">
             <el-form-item>
               <template #label><span style="display:flex;align-items:center;gap:4px"><el-icon><Calendar/></el-icon> 结束时间</span></template>
-              <el-date-picker v-model="itemForm.end_date" type="datetime" placeholder="结束时间" style="width:100%" size="large" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss"/>
+              <el-date-picker v-model="itemForm.end_date" type="datetime" placeholder="结束时间" style="width:100%" size="large" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" :default-time="new Date(2000,0,1,17,30,0)"/>
             </el-form-item>
           </el-col>
         </el-row>
@@ -335,7 +407,7 @@
           <el-col :span="editingItem ? 12 : 12">
             <el-form-item>
               <template #label><span style="display:flex;align-items:center;gap:4px"><el-icon><Clock/></el-icon> 预估工时(h)</span></template>
-              <el-input-number v-model="itemForm.estimated_hours" :min="0" :step="0.5" :precision="1" style="width:100%" size="large"/>
+              <el-input-number v-model="itemForm.estimated_hours" :min="0" :step="0.5" :precision="1" style="width:100%" size="large" :disabled="crossWeekEnabled"/>
             </el-form-item>
           </el-col>
         </el-row>
@@ -387,6 +459,7 @@
                 <div :style="{fontSize:'13px',fontWeight:600,color:'var(--el-text-color-primary)',textDecoration: m.is_completed ? 'line-through' : 'none', opacity: m.is_completed ? 0.6 : 1}">{{ m.title }}</div>
                 <div v-if="m.description" style="font-size:12px;color:var(--el-text-color-secondary);margin-top:3px;line-height:1.5;word-break:break-word">{{ m.description }}</div>
                 <div style="display:flex;align-items:center;gap:12px;margin-top:6px;flex-wrap:wrap">
+                  <span v-if="m.week_start" style="font-size:11px;color:var(--el-color-primary);font-weight:500">📅 {{ getWeekLabel(m.week_start) }}</span>
                   <span v-if="m.target_date" style="font-size:11px;color:var(--el-text-color-secondary)">🎯 目标 {{ m.target_date }}</span>
                   <span v-if="m.hours" style="font-size:11px;color:var(--el-text-color-secondary)">⏱ {{ m.hours }}h</span>
                 </div>
@@ -489,7 +562,8 @@ import { ref, reactive, computed, onMounted, watch, nextTick, toRaw } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Search, Close, EditPen, Plus, Document, PriceTag, Flag, List, User, Calendar,
-  ArrowLeft, ArrowRight, Folder, Clock, Delete, Sunny, Moon, SwitchButton
+  ArrowLeft, ArrowRight, Folder, Clock, Delete, Sunny, Moon, SwitchButton,
+  Paperclip, Upload, RefreshRight,
 } from '@element-plus/icons-vue'
 import { use } from 'echarts/core'
 import { BarChart, PieChart, LineChart } from 'echarts/charts'
@@ -500,13 +574,16 @@ import { useProjectStore } from '@/stores/project'
 import { useWorkItemStore } from '@/stores/work-item'
 import { useScopeStore } from '@/stores/scope'
 import type { WorkItem } from '@/api/work-items'
-import { fetchWorkItems } from '@/api/work-items'
+import { fetchWorkItems, cleanupWorkImages, uploadAttachment as uploadAttachApi } from '@/api/work-items'
+
+interface AttachItem { name: string; url: string; size: number }
 import { getWeeklyStats, getTrendStats, getMonthlyStats, type WeeklyStats, type TrendPoint, type MonthlyStats } from '@/api/work-stats'
 import { getWeeklyTarget, setWeeklyTarget } from '@/api/weekly-targets'
 import { fetchMilestones, createMilestone, updateMilestone, deleteMilestone, reorderMilestones, type Milestone } from '@/api/milestones'
 import { PRIORITY_OPTIONS, STATUS_OPTIONS, PRIORITY_MAP } from '@/types'
 import { exportWorkWeekly } from '@/utils/export'
 import { useChartTheme } from '@/composables/useChartTheme'
+import TiptapEditor from '@/components/TiptapEditor.vue'
 
 use([BarChart, PieChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent, CanvasRenderer])
 
@@ -517,6 +594,11 @@ const scope = useScopeStore()
 
 const priorityOptions = PRIORITY_OPTIONS
 const statusOptions = STATUS_OPTIONS
+const priorityFilterOptions = [
+  { value: 'high', label: '高', dotColor: '#f56c6c' },
+  { value: 'medium', label: '中', dotColor: '#e6a23c' },
+  { value: 'low', label: '低', dotColor: '#67c23a' },
+]
 const priorityMap = PRIORITY_MAP
 const priorityColor = (p: string) => p === 'high' ? '#f56c6c' : p === 'medium' ? '#e6a23c' : '#67c23a'
 const priorityBg = (p: string) => p === 'high' ? '#fef0f0' : p === 'medium' ? '#fdf6ec' : '#eefbe6'
@@ -768,8 +850,26 @@ function getItemHours(itemId: number): number {
   return store.getTotalHours(itemId)
 }
 
+function displayItemHours(item: WorkItem): number {
+  if (item.is_cross_week && item.week_hours && viewMode.value === 'week') {
+    const ws = formatDate(currentWeekStart.value)
+    return item.week_hours[ws] ?? item.estimated_hours ?? 0
+  }
+  return item.estimated_hours ?? 0
+}
+
+/** For cross-week items, determine the effective column:
+ *  if current week is completed → always "done", else follow item.status */
+function getItemCol(item: WorkItem): string {
+  if (item.is_cross_week && viewMode.value === 'week') {
+    const ws = formatDate(currentWeekStart.value)
+    if ((item.completed_weeks || []).includes(ws)) return 'done'
+  }
+  return item.status
+}
+
 function isOverdue(item: WorkItem): boolean {
-  if (!item.end_date || item.status === 'done') return false
+  if (!item.end_date || getItemCol(item) === 'done') return false
   return new Date() > new Date(item.end_date)
 }
 
@@ -785,8 +885,9 @@ function onDragEnd() { draggedItem = null; dragOverIdx = -1 }
 async function onDrop(e: DragEvent, toStatus: string, group: any) {
   if (!draggedItem) return
   const itemId = draggedItem.id
-  const targetIdx = dragOverIdx >= 0 ? dragOverIdx : group.items.filter((i: WorkItem) => i.status === toStatus).length
-  await store.moveItem(itemId, toStatus, targetIdx)
+  const targetIdx = dragOverIdx >= 0 ? dragOverIdx : group.items.filter((i: WorkItem) => getItemCol(i) === toStatus).length
+  const ws = formatDate(currentWeekStart.value)
+await store.moveItem(itemId, toStatus, targetIdx, ws)
   // Reload correct dataset based on view mode
   if (viewMode.value === 'week') {
     await store.fetch()
@@ -802,8 +903,39 @@ async function onDrop(e: DragEvent, toStatus: string, group: any) {
 
 // ── Dialog ──
 const dialogVisible = ref(false)
+const editorRef = ref<any>(null)
 const editingItem = ref<WorkItem | null>(null)
 const saving = ref(false)
+const dialogSaved = ref(false) // skip cleanup on save
+
+async function cleanupOrphanImages(keepUrls: string[]) {
+  if (!editorRef.value) return
+  const sessionUrls = editorRef.value.getSessionUrls() as string[]
+  const keepSet = new Set(keepUrls)
+  const orphaned = sessionUrls.filter(u => !keepSet.has(u))
+  if (orphaned.length > 0) {
+    try { await cleanupWorkImages(orphaned) } catch {}
+  }
+}
+
+async function cleanupAllSessionImages() {
+  if (!editorRef.value) return
+  const sessionUrls = editorRef.value.getSessionUrls() as string[]
+  if (sessionUrls.length > 0) {
+    try { await cleanupWorkImages(sessionUrls) } catch {}
+  }
+}
+
+// When dialog closes: if not saved, clean up ALL session images & attachments
+watch(dialogVisible, (val) => {
+  if (!val) {
+    if (!dialogSaved.value) {
+      cleanupAllSessionImages()
+      cleanupAllSessionAttachments()
+    }
+    dialogSaved.value = false
+  }
+})
 const showLogInput = ref(false)
 const editLogId = ref<number | null>(null)
 const editLogForm = reactive({ hours: 0, log_date: '', note: '' })
@@ -835,7 +967,79 @@ const itemForm = reactive({
   title: '', description: '', project_id: 0, type: 'task', priority: 'medium',
   status: 'todo', estimated_hours: null as number | null,
   start_date: '', end_date: '', tags: [] as string[],
+  attachments: [] as AttachItem[],
+  week_end: null as string | null,
+  week_hours: null as Record<string, number> | null,
 })
+
+// Cross-week state
+const crossWeekEnabled = ref(false)
+const crossWeekStart = ref('')
+const crossWeekEnd = ref('')
+const weekList = ref<{ key: string; hours: number }[]>([])
+
+function getMondayStr(d: Date): string {
+  const date = new Date(d)
+  const day = date.getDay()
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1)
+  date.setDate(diff)
+  date.setHours(0, 0, 0, 0)
+  return formatDate(date)
+}
+
+function disableNonMonday(d: Date): boolean {
+  return d.getDay() !== 1
+}
+
+function getWeekLabel(key: string): string {
+  const d = new Date(key + 'T00:00:00')
+  const m = d.getMonth() + 1; const dt = d.getDate()
+  return `W${Math.ceil((d.getDate() + 6 - d.getDay()) / 7)} ${m}/${dt}`
+}
+
+function buildWeekList(start: string, end: string, existing?: Record<string, number>) {
+  const list: { key: string; hours: number }[] = []
+  if (!start || !end) return list
+  const s = new Date(start + 'T00:00:00')
+  const e = new Date(end + 'T00:00:00')
+  if (s > e) return list
+  const cur = new Date(s)
+  while (cur <= e) {
+    const key = formatDate(cur)
+    list.push({ key, hours: existing?.[key] ?? 0 })
+    cur.setDate(cur.getDate() + 7)
+  }
+  return list
+}
+
+// Watch cross-week toggle → clear data when disabled
+watch(crossWeekEnabled, (val) => {
+  if (!val) {
+    itemForm.week_end = null
+    itemForm.week_hours = null
+    crossWeekStart.value = ''
+    crossWeekEnd.value = ''
+    weekList.value = []
+  }
+})
+
+function rebuildWeekHours() {
+  if (!crossWeekStart.value || !crossWeekEnd.value) { weekList.value = []; return }
+  const existing = { ...itemForm.week_hours } || {}
+  weekList.value = buildWeekList(crossWeekStart.value, crossWeekEnd.value, existing)
+  syncWeekHours()
+}
+
+function syncWeekHours() {
+  if (!crossWeekEnabled.value) return
+  const wh: Record<string, number> = {}
+  for (const w of weekList.value) wh[w.key] = w.hours || 0
+  itemForm.week_hours = wh
+  itemForm.week_end = crossWeekEnd.value || null
+  itemForm.week_start = crossWeekStart.value || itemForm.week_start
+  // Auto-compute total estimated_hours
+  itemForm.estimated_hours = Object.values(wh).reduce((s, v) => s + (v || 0), 0)
+}
 const formErrors = reactive({ title: '' })
 
 const logForm = reactive({ hours: 1, log_date: formatDate(new Date()), note: '' })
@@ -848,6 +1052,69 @@ function showItemTagInput() {
   tagInputVisible.value = true
   nextTick(() => tagInputRef.value?.focus?.())
 }
+// Attachment helpers
+const sessionAttachUrls = new Set<string>()
+const attachInput = ref<HTMLInputElement | null>(null)
+const attachDragover = ref(false)
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + 'B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + 'MB'
+}
+
+async function uploadAttachFile(file: File) {
+  try {
+    const res = await uploadAttachApi(file)
+    itemForm.attachments.push({ name: res.name, url: res.url, size: res.size })
+    sessionAttachUrls.add(res.url)
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '上传失败')
+  }
+}
+
+function handleAttachPick(e: Event) {
+  const files = (e.target as HTMLInputElement).files
+  if (!files) return
+  for (const file of files) uploadAttachFile(file)
+}
+
+function handleAttachDrop(e: DragEvent) {
+  attachDragover.value = false
+  const files = e.dataTransfer?.files
+  if (!files) return
+  for (const file of files) uploadAttachFile(file)
+}
+
+function openAttach(url: string) {
+  window.open(url, '_blank')
+}
+
+function removeAttach(idx: number) {
+  const att = itemForm.attachments[idx]
+  if (att) {
+    // Immediately delete the file from server
+    if (att.url) {
+      cleanupWorkImages([att.url]).catch(() => {})
+      sessionAttachUrls.delete(att.url)
+    }
+    itemForm.attachments.splice(idx, 1)
+  }
+}
+
+async function cleanupOrphanAttachments(keepUrls: string[]) {
+  const orphaned = [...sessionAttachUrls].filter(u => !keepUrls.includes(u))
+  if (orphaned.length > 0) {
+    try { await cleanupWorkImages(orphaned) } catch {}
+  }
+}
+
+async function cleanupAllSessionAttachments() {
+  if (sessionAttachUrls.size > 0) {
+    try { await cleanupWorkImages([...sessionAttachUrls]) } catch {}
+  }
+}
+
 function addItemTag() {
   const val = tagInputValue.value.trim()
   if (val && !itemForm.tags.includes(val)) itemForm.tags.push(val)
@@ -861,7 +1128,10 @@ function openCreate() {
   itemForm.title = ''; itemForm.description = ''; itemForm.project_id = projectStore.projects[0]?.id || 0
   itemForm.type = 'task'; itemForm.priority = 'medium'; itemForm.status = 'todo'
   itemForm.estimated_hours = null; itemForm.start_date = formatDateTime(new Date()); itemForm.end_date = ''
-  itemForm.tags = []
+  itemForm.tags = []; itemForm.attachments = []
+  itemForm.week_end = null; itemForm.week_hours = null
+  crossWeekEnabled.value = false; crossWeekStart.value = ''; crossWeekEnd.value = ''; weekList.value = []
+  sessionAttachUrls.clear()
   formErrors.title = ''
   showLogInput.value = false
   editingLogs.value = []
@@ -877,6 +1147,19 @@ function openEdit(item: WorkItem) {
   itemForm.start_date = item.start_date ? item.start_date.slice(0, 19) : ''
   itemForm.end_date = item.end_date ? item.end_date.slice(0, 19) : ''
   itemForm.tags = [...(item.tags || [])]
+  itemForm.attachments = [...(item.attachments || [])]
+  itemForm.week_end = item.week_end || null
+  itemForm.week_hours = item.week_hours || null
+  // Restore cross-week state
+  if (item.is_cross_week && item.week_hours) {
+    crossWeekEnabled.value = true
+    crossWeekStart.value = item.week_start || ''
+    crossWeekEnd.value = item.week_end || ''
+    weekList.value = buildWeekList(crossWeekStart.value, crossWeekEnd.value, item.week_hours)
+  } else {
+    crossWeekEnabled.value = false; crossWeekStart.value = ''; crossWeekEnd.value = ''; weekList.value = []
+  }
+  sessionAttachUrls.clear()
   formErrors.title = ''
   showLogInput.value = false
   dialogVisible.value = true
@@ -896,8 +1179,16 @@ async function handleSave() {
       estimated_hours: itemForm.estimated_hours,
       start_date: itemForm.start_date || undefined,
       end_date: itemForm.end_date || undefined,
-      week_start: viewMode.value === 'week' ? formatDate(currentWeekStart.value) : formatDate(getMonday(new Date(currentMonth.value.year, currentMonth.value.month - 1, 1))),
+      week_start: crossWeekEnabled.value && crossWeekStart.value ? crossWeekStart.value : (viewMode.value === 'week' ? formatDate(currentWeekStart.value) : formatDate(getMonday(new Date(currentMonth.value.year, currentMonth.value.month - 1, 1)))),
       tags: itemForm.tags,
+      attachments: itemForm.attachments,
+      week_end: crossWeekEnabled.value ? (itemForm.week_end || undefined) : undefined,
+      week_hours: crossWeekEnabled.value ? (itemForm.week_hours || undefined) : undefined,
+    }
+    // If not cross-week, clear the fields
+    if (!crossWeekEnabled.value) {
+      data.week_end = null
+      data.week_hours = null
     }
     if (editingItem.value) {
       data.status = itemForm.status
@@ -907,6 +1198,14 @@ async function handleSave() {
       await store.add(data)
       ElMessage.success('已创建')
     }
+    // Clean up orphaned session images & attachments before closing dialog
+    if (editorRef.value) {
+      const currentUrls = editorRef.value.getCurrentImageUrls() as string[]
+      await cleanupOrphanImages(currentUrls)
+    }
+    const currentAttachUrls = itemForm.attachments.map(a => a.url || '').filter(Boolean)
+    await cleanupOrphanAttachments(currentAttachUrls)
+    dialogSaved.value = true
     dialogVisible.value = false
     refreshData()
   } catch { ElMessage.error('操作失败') }
@@ -957,7 +1256,7 @@ const milestones = ref<Milestone[]>([])
 const msDialogVisible = ref(false)
 const editingMilestone = ref<Milestone | null>(null)
 const savingMs = ref(false)
-const msForm = reactive({ title: '', description: '', hours: null as number | null, target_date: '' })
+const msForm = reactive({ title: '', description: '', hours: null as number | null, target_date: '', week_start: '' })
 const msErrors = reactive({ title: '' })
 
 const milestoneProgress = computed(() => {
@@ -985,9 +1284,12 @@ function openMilestoneDialog(m?: Milestone) {
     editingMilestone.value = m
     msForm.title = m.title; msForm.description = m.description || ''
     msForm.hours = m.hours; msForm.target_date = m.target_date || ''
+    msForm.week_start = m.week_start || ''
   } else {
     editingMilestone.value = null
     msForm.title = ''; msForm.description = ''; msForm.hours = null; msForm.target_date = ''
+    // Auto-set week_start to current browsing week
+    msForm.week_start = formatDate(currentWeekStart.value)
   }
   msDialogVisible.value = true
 }
@@ -1002,6 +1304,7 @@ async function saveMilestone() {
       description: msForm.description || undefined,
       hours: msForm.hours || undefined,
       target_date: msForm.target_date || undefined,
+      week_start: msForm.week_start || undefined,
     }
     if (editingMilestone.value) {
       await updateMilestone(editingMilestone.value.id, data)
@@ -1228,7 +1531,7 @@ const dailyHours = ref<number[]>([0, 0, 0, 0, 0, 0, 0])
 function computeDailyHours() {
   const hours = [0, 0, 0, 0, 0, 0, 0]
   for (const item of store.items) {
-    const eh = item.estimated_hours || 0
+    const eh = displayItemHours(item)
     if (!eh || !item.start_date) continue
     const d = new Date(item.start_date)
     const dow = d.getDay() === 0 ? 6 : d.getDay() - 1 // 0=Mon..6=Sun
@@ -1398,6 +1701,33 @@ onMounted(async () => {
 }
 .ww-dialog :deep(.el-button) {
   border-radius: 8px;
+}
+
+/* Attachment drop zone */
+.attach-drop-zone {
+  width: 100%;
+  height: 56px;
+  border: 2px dashed var(--el-border-color);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--el-text-color-placeholder);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--el-fill-color-lighter);
+}
+.attach-drop-zone:hover {
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+.attach-dragover {
+  border-color: var(--el-color-primary) !important;
+  color: var(--el-color-primary) !important;
+  background: var(--el-color-primary-light-9) !important;
 }
 .ms-add-btn {
   background: var(--el-color-primary-light-9) !important;

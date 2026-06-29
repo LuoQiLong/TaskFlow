@@ -9,12 +9,12 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
 # Database — SQL Server
 import urllib.parse
 
-DB_HOST = os.getenv("TASKFLOW_DB_HOST", "LQL")
+DB_HOST = os.getenv("TASKFLOW_DB_HOST", "10.128.30.82,20001")
 DB_PORT = os.getenv("TASKFLOW_DB_PORT", "")
-DB_USER = os.getenv("TASKFLOW_DB_USER", "sa")
-DB_PASSWORD = os.getenv("TASKFLOW_DB_PASSWORD", "123")
+DB_USER = os.getenv("TASKFLOW_DB_USER", "staadmin")
+DB_PASSWORD = os.getenv("TASKFLOW_DB_PASSWORD", "Ska3686Kb*i9")
 DB_NAME = os.getenv("TASKFLOW_DB_NAME", "taskflow")
-DB_DRIVER = os.getenv("TASKFLOW_DB_DRIVER", "ODBC Driver 18 for SQL Server")
+DB_DRIVER = os.getenv("TASKFLOW_DB_DRIVER", "ODBC Driver 17 for SQL Server")
 
 def _build_conn_str(database: str) -> str:
     port_part = f",{DB_PORT}" if DB_PORT else ""
@@ -34,7 +34,12 @@ SMTP_PASSWORD = os.getenv("TASKFLOW_SMTP_PASSWORD", "yunergnxljcjecih")
 SMTP_FROM_NAME = os.getenv("TASKFLOW_SMTP_FROM_NAME", "TaskFlow")
 
 # CORS
-CORS_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+# CORS origins — override via env for production, defaults for local dev
+_CORS_ENV = os.getenv("TASKFLOW_CORS_ORIGINS", "")
+if _CORS_ENV:
+    CORS_ORIGINS = [o.strip() for o in _CORS_ENV.split(",") if o.strip()]
+else:
+    CORS_ORIGINS = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]

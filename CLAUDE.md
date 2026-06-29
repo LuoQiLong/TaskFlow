@@ -20,18 +20,19 @@ cp .env.example .env          # first time only — edit SECRET_KEY for producti
 pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# Frontend (port 5173, proxies /api → localhost:8000)
+# Frontend (port 5173, proxies /api + /static → localhost:8000)
 cd frontend
 npm install
 npm run dev        # dev server
-npm run build      # type-check + vite build
+npm run build      # type-check (vue-tsc -b) + vite build
+npm run preview    # serve production build locally
 ```
 
 Backend Swagger docs: `http://localhost:8000/docs`
 
 Environment variables (optional, with defaults in `backend/app/config.py`):
 - `TASKFLOW_SECRET_KEY` — JWT signing key (default: dev key, **change in production**)
-- `TASKFLOW_DATABASE_URL` — database URL (default: SQL Server via `mssql+pyodbc`, supports SQLite)
+- `TASKFLOW_DB_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_NAME` / `_DRIVER` — SQL Server connection (defaults: `LQL`, empty port, `sa`, `123`, `taskflow`, `ODBC Driver 18 for SQL Server`). The code does NOT read `TASKFLOW_DATABASE_URL` — it always builds a `mssql+pyodbc` URL from the individual params. Note: `.env.example` incorrectly references `TASKFLOW_DATABASE_URL` (SQLite fallback) — this is not honored by `config.py`.
 - `TASKFLOW_SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` — QQ SMTP for password reset emails
 
 ## Architecture
@@ -57,6 +58,8 @@ backend/app/
 - All timestamps use `datetime.now()` (Beijing time), NOT UTC
 - `resolve_target_user(current_user, target_user_id)` helper for admin scope switching across all routes
 - User roles: `admin` / `member`; first admin designated manually in database
+- **Startup**: `main.py` auto-creates the SQL Server database (via pyodbc to `master`), then runs `Base.metadata.create_all()` + ad-hoc `ALTER TABLE` migrations for the `users` table columns (`role`, `display_name`, `is_active`, `avatar_url`). No Alembic — migrations are manual.
+- **Static files**: Avatar uploads go to `backend/static/avatars/` (auto-created on startup); FastAPI mounts `/static` and Vite proxies it
 
 ### Frontend
 
@@ -143,6 +146,9 @@ Full schema: `backend/DATABASE_SCHEMA.md`
 - Frontend: Background glows on all authenticated pages via `.app-main { position: relative; z-index }` layers
 - Frontend: `scopeStore` persisted to localStorage, all stores inject `target_user_id` from scope when fetching
 - Pydantic: Field named `date` conflicts with `datetime.date` type — use `log_date` or `target_date` instead
-- TypeScript: `erasableSyntaxOnly` is enabled in `tsconfig.app.json` (TS 6.0 feature)
+- TypeScript: `erasableSyntaxOnly` is enabled in `tsconfig.app.json` (TS 6.0 feature) — forbids `enum`, `namespace`, and constructor parameter properties. Use `Record<string, string>` + `const` objects instead of enums (see `types/index.ts` for the established pattern).
 - Auth: Login and Register are separate views with their own routes (`/login`, `/register`), both guarded with `{ guest: true }` meta
 - Auth: Forgot/reset password paths excluded from 401 redirect in `client.ts`
+- **Timezones**: JWT token expiry uses `datetime.now(timezone.utc)` in `utils/security.py`, but all application data timestamps use `datetime.now()` (Beijing time) in models/routers. Don't mix these — tokens → UTC, data → local.
+- **Excel export**: The frontend uses `xlsx-js-style` for client-side Excel export of work items; the export logic lives in `WorkWeeklyView.vue`.
+- **`config.py` security**: Database and SMTP credentials are hardcoded as defaults — override via environment variables in production.

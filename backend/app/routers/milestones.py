@@ -50,6 +50,7 @@ def create_milestone(
         description=data.description,
         hours=data.hours,
         target_date=data.target_date,
+        week_start=data.week_start,
         sort_order=next_order,
         user_id=current_user.id,
     )
@@ -84,7 +85,7 @@ def update_milestone(
             if item:
                 sys_log = WorkLog(
                     work_item_id=m.work_item_id,
-                    week_start=item.week_start,
+                    week_start=m.week_start or item.week_start,
                     hours=m.hours,
                     log_date=date.today(),
                     note=f"{m.title}",

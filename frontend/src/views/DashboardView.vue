@@ -158,6 +158,7 @@
             <el-card shadow="never" style="border-radius:12px">
               <template #header><span style="font-weight:700;font-size:14px">月度工时汇总</span></template>
               <v-chart :option="weeklyStackOption" style="height:300px" autoresize />
+              <v-chart v-if="projectBreakdownOption" :option="projectBreakdownOption" style="height:220px;margin-top:8px" autoresize />
             </el-card>
           </el-col>
         </el-row>
@@ -471,13 +472,17 @@ const creationTrendOption = computed(() => {
   }
 })
 
-// Chart: 月度工时汇总 (stacked bar)
+// Chart: 月度工时汇总 (stacked bar by project)
 const weeklyStackOption = computed(() => {
   const data = dashData.value?.weekly_breakdown ?? []
+
+  // Build project-level data from project_breakdown totals
+  // Since weekly_breakdown doesn't have per-project detail,
+  // we show task/work_order stacked with project breakdown below
   return {
-    tooltip: { trigger: 'axis', formatter: (p: any) => `${p[0].axisValue}<br/>${p.map((s: any) => `${s.seriesName}: ${s.value}h`).join('<br/>')}` },
+    tooltip: { trigger: 'axis' },
     legend: { bottom: 0, textStyle: { color: chart.textRegular.value, fontSize: 12 } },
-    grid: { left: '3%', right: '5%', bottom: '10%', containLabel: true },
+    grid: { left: '3%', right: '5%', bottom: '10%', top: '15%', containLabel: true },
     xAxis: { type: 'category', data: data.map(d => d.week_start.slice(5)), axisLabel: { color: chart.textSecondary.value, fontSize: 11 } },
     yAxis: { type: 'value', axisLabel: { color: chart.textSecondary.value, formatter: '{value}h' } },
     series: [
@@ -488,7 +493,6 @@ const weeklyStackOption = computed(() => {
         data: data.map(d => d.task_hours),
         itemStyle: { color: '#6366f1', borderRadius: 0 },
         barWidth: 40,
-        label: { show: true, position: 'inside', fontSize: 11, color: '#fff', formatter: (p: any) => p.value > 0 ? p.value + 'h' : '' },
       },
       {
         name: '工单',
@@ -496,9 +500,37 @@ const weeklyStackOption = computed(() => {
         stack: 'total',
         data: data.map(d => d.work_order_hours),
         itemStyle: { color: '#e6a23c', borderRadius: [6, 6, 0, 0] },
-        label: { show: true, position: 'inside', fontSize: 11, color: '#fff', formatter: (p: any) => p.value > 0 ? p.value + 'h' : '' },
+      },
+      {
+        name: '汇总',
+        type: 'bar',
+        stack: '__total_label__',
+        data: data.map(d => d.total_hours),
+        itemStyle: { color: 'transparent' },
+        barGap: '-100%',
+        barWidth: 40,
+        label: { show: true, position: 'top', fontSize: 12, fontWeight: 600, color: chart.textPrimary.value, formatter: (p: any) => p.value > 0 ? p.value + 'h' : '' },
+        tooltip: { show: false },
       },
     ],
+  }
+})
+
+// Project breakdown chart (horizontal bar)
+const projectBreakdownOption = computed(() => {
+  const data = dashData.value?.project_breakdown ?? []
+  if (!data.length) return null
+  return {
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: '3%', right: '12%', bottom: '3%', top: '5%', containLabel: true },
+    xAxis: { type: 'value', axisLabel: { fontSize: 11, color: chart.textSecondary.value }, splitLine: { lineStyle: { color: chart.borderLighter.value } } },
+    yAxis: { type: 'category', data: data.map(d => d.project_name).reverse(), axisLabel: { fontSize: 12, fontWeight: 600, color: chart.textRegular.value }, axisLine: { show: false }, axisTick: { show: false } },
+    series: [{
+      type: 'bar',
+      data: data.map(d => ({ value: d.hours, itemStyle: { color: d.project_color, borderRadius: [0, 6, 6, 0] } })).reverse(),
+      barWidth: 16,
+      label: { show: true, position: 'right', fontSize: 12, fontWeight: 600, color: chart.textRegular.value, formatter: '{c}h' },
+    }],
   }
 })
 </script>

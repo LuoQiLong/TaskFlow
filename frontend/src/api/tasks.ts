@@ -1,14 +1,17 @@
 import client from './client'
 
+export interface AttachItem { name: string; url: string; size: number }
+
 export interface Task {
   id: number; title: string; description: string | null
   status: 'todo' | 'in_progress' | 'done' | 'archived'; priority: 'low' | 'medium' | 'high'
   column_order: number; due_date: string | null; assignee: string | null
   tags: string[]
+  attachments: AttachItem[]
   user_id: number; created_at: string | null; updated_at: string | null
 }
-export interface TaskCreate { title: string; description?: string; priority?: string; due_date?: string; assignee?: string; tags?: string[] }
-export interface TaskUpdate { title?: string; description?: string; status?: string; priority?: string; column_order?: number; due_date?: string; assignee?: string; tags?: string[] }
+export interface TaskCreate { title: string; description?: string; priority?: string; due_date?: string; assignee?: string; tags?: string[]; attachments?: AttachItem[] }
+export interface TaskUpdate { title?: string; description?: string; status?: string; priority?: string; column_order?: number; due_date?: string; assignee?: string; tags?: string[]; attachments?: AttachItem[] }
 export interface StatusUpdate { status: string; column_order: number }
 export interface ReorderItem { id: number; status: string; column_order: number }
 export interface TaskFilters { status?: string; priority?: string; tag?: string; search?: string; date_from?: string; date_to?: string; overdue?: boolean; include_archived?: boolean; target_user_id?: number }
@@ -30,3 +33,14 @@ export const updateTaskStatus = (id: number, data: StatusUpdate) =>
 
 export const reorderTasks = (items: ReorderItem[]) =>
   client.patch<Task[]>('/tasks/reorder', items).then(r => r.data)
+
+export const cleanupTaskImages = (urls: string[]) =>
+  client.post('/tasks/images/cleanup', urls).then(r => r.data)
+
+export const uploadTaskAttachment = (file: File) => {
+  const form = new FormData()
+  form.append('file', file)
+  return client.post<{name:string;url:string;size:number}>('/tasks/upload-attachment', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then(r => r.data)
+}

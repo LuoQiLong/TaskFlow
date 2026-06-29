@@ -10,9 +10,12 @@
         <el-option v-for="o in statusOptions" :key="o.value" :label="o.label" :value="o.value"/>
       </el-select>
       <el-select v-model="filters.priority" placeholder="优先级" clearable style="width:130px" size="large" @change="onFilterChange('priority', $event)">
-        <el-option label="🔴 高" value="high"/>
-        <el-option label="🟡 中" value="medium"/>
-        <el-option label="🟢 低" value="low"/>
+        <el-option v-for="o in priorityFilterOptions" :key="o.value" :value="o.value">
+          <span style="display:flex;align-items:center;gap:6px">
+            <span :style="{width:'10px',height:'10px',borderRadius:'50%',background:o.dotColor,flexShrink:0}"/>
+            {{ o.label }}
+          </span>
+        </el-option>
       </el-select>
       <div style="width:500px;flex-shrink:0"><el-date-picker v-model="dateRange" type="daterange" range-separator="至" start-placeholder="开始" end-placeholder="结束" format="YYYY-MM-DD" value-format="YYYY-MM-DD" size="large" style="width:100%" @change="onDateChange"/></div>
       <el-select v-model="sortBy" placeholder="排序" size="large" style="width:140px" @change="onSortChange">
@@ -65,7 +68,7 @@
                   <span :style="{ fontSize:'11px',padding:'2px 10px',borderRadius:'10px',fontWeight:600,background:priorityBg(task.priority),color:priorityColor(task.priority),border:`1px solid ${priorityColor(task.priority)}`,whiteSpace:'nowrap' }">{{ priorityMap[task.priority] }}</span>
                 </div>
               </div>
-              <div v-if="task.description" style="font-size:12px;color:var(--el-text-color-secondary);margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ task.description }}</div>
+              <div v-if="task.description" style="font-size:12px;color:var(--el-text-color-secondary);margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ stripHtml(task.description) }}</div>
               <!-- Tags row -->
               <div v-if="(task.tags||[]).length" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">
                 <span v-for="t in (task.tags||[])" :key="t" style="background:var(--el-color-primary-light-9);color:var(--el-color-primary);font-size:12px;padding:2px 10px;border-radius:8px;font-weight:500">#{{ t }}</span>
@@ -116,7 +119,7 @@
     </div>
 
     <!-- Task Dialog -->
-    <el-dialog v-model="dialogVisible" width="540px" destroy-on-close class="task-dialog">
+    <el-dialog v-model="dialogVisible" width="1000px" destroy-on-close class="task-dialog">
       <template #header>
         <div style="display:flex;align-items:center;gap:10px">
           <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center">
@@ -132,7 +135,32 @@
         </el-form-item>
         <el-form-item>
           <template #label><span style="display:flex;align-items:center;gap:4px"><el-icon><Document/></el-icon> 描述</span></template>
-          <el-input v-model="taskForm.description" type="textarea" :rows="8" placeholder="任务描述（可选）" size="large"/>
+          <TiptapEditor ref="editorRef" upload-url="/tasks/upload-image" v-model="taskForm.description" />
+        </el-form-item>
+        <!-- Attachments -->
+        <el-form-item>
+          <template #label><span style="display:flex;align-items:center;gap:4px"><el-icon><Paperclip/></el-icon> 附件</span></template>
+          <div style="width:100%">
+            <div v-if="taskForm.attachments.length" style="border:1px solid var(--el-border-color-lighter);border-radius:6px;overflow:hidden;margin-bottom:8px">
+              <div v-for="(att, idx) in taskForm.attachments" :key="att.url" style="display:flex;align-items:center;padding:6px 10px;gap:8px;border-bottom:1px solid var(--el-border-color-lighter);font-size:13px" :style="{background: idx%2===0?'var(--el-fill-color-lighter)':'var(--el-fill-color-blank)'}">
+                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--el-text-color-primary);cursor:pointer" @click="openAttach(att.url)" :title="att.name">{{ att.name }}</span>
+                <span style="color:var(--el-text-color-placeholder);font-size:11px;white-space:nowrap">{{ formatFileSize(att.size) }}</span>
+                <el-button type="danger" link size="small" @click="removeAttach(idx)"><el-icon><Delete/></el-icon></el-button>
+              </div>
+            </div>
+            <div
+              class="attach-drop-zone"
+              :class="{ 'attach-dragover': attachDragover }"
+              @click="attachInput?.click()"
+              @dragover.prevent="attachDragover = true"
+              @dragleave="attachDragover = false"
+              @drop.prevent="handleAttachDrop"
+            >
+              <el-icon :size="22"><Upload/></el-icon>
+              <span>拖拽文件到此处，或点击上传</span>
+              <input ref="attachInput" type="file" style="display:none" @change="handleAttachPick" multiple />
+            </div>
+          </div>
         </el-form-item>
         <el-row :gutter="16">
           <el-col :span="12">
@@ -172,7 +200,7 @@
         </el-row>
         <el-form-item>
           <template #label><span style="display:flex;align-items:center;gap:4px"><el-icon><Calendar/></el-icon> 截止日期</span></template>
-          <el-date-picker v-model="taskForm.dueDate" type="datetime" placeholder="选择日期" style="width:100%" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" size="large"/>
+          <el-date-picker v-model="taskForm.dueDate" type="datetime" placeholder="选择日期" style="width:100%" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" size="large" :default-time="new Date(2000,0,1,17,30,0)"/>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -271,18 +299,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { useChartTheme } from '@/composables/useChartTheme'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, EditPen, Plus, Document, PriceTag, Flag, List, User, Calendar, Back, Delete } from '@element-plus/icons-vue'
+import { Search, EditPen, Plus, Document, PriceTag, Flag, List, User, Calendar, Back, Delete, Paperclip, Upload } from '@element-plus/icons-vue'
 import { use } from 'echarts/core'
 import { BarChart, PieChart } from 'echarts/charts'
 import { TitleComponent, TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
 import { useTaskStore } from '@/stores/task'
-import type { Task } from '@/api/tasks'
+import type { Task, AttachItem } from '@/api/tasks'
+import { cleanupTaskImages, uploadTaskAttachment } from '@/api/tasks'
 import { STATUS_OPTIONS, PRIORITY_OPTIONS, STATUS_MAP, PRIORITY_MAP } from '@/types'
+import TiptapEditor from '@/components/TiptapEditor.vue'
 
 use([BarChart, PieChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent, CanvasRenderer])
 
@@ -290,6 +320,11 @@ const store = useTaskStore()
 const statusOptions = STATUS_OPTIONS
 const priorityOptions = PRIORITY_OPTIONS
 const priorityMap = PRIORITY_MAP
+const priorityFilterOptions = [
+  { value: 'high', label: '高', dotColor: '#f56c6c' },
+  { value: 'medium', label: '中', dotColor: '#e6a23c' },
+  { value: 'low', label: '低', dotColor: '#67c23a' },
+]
 
 const columns = [
   { key: 'todo', label: '待处理', bg: 'var(--el-color-primary-light-9)', dotColor: '#667eea', emptyIcon: '📥' },
@@ -445,6 +480,12 @@ function priorityColor(p: string) { return p === 'high' ? '#f56c6c' : p === 'med
 function priorityBg(p: string) { return p === 'high' ? '#fef0f0' : p === 'medium' ? '#fdf6ec' : '#eefbe6' }
 function formatDate(d: string) { return new Date(d).toLocaleDateString('zh-CN') }
 function isOverdue(t: Task) { return t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done' }
+function stripHtml(html: string | null): string {
+  if (!html) return ''
+  const tmp = document.createElement('div')
+  tmp.innerHTML = html
+  return tmp.textContent || tmp.innerText || ''
+}
 
 // Drag and drop
 let draggedTask: Task | null = null
@@ -468,10 +509,59 @@ async function onDrop(e: DragEvent, toCol: string) {
 const dialogVisible = ref(false)
 const editingTask = ref<Task | null>(null)
 const saving = ref(false)
-const taskForm = reactive<{ title: string; description: string; priority: string; status: string; assignee: string; dueDate: string; tags: string[] }>({
-  title: '', description: '', priority: 'medium', status: 'todo', assignee: '', dueDate: '', tags: []
+const taskForm = reactive<{ title: string; description: string; priority: string; status: string; assignee: string; dueDate: string; tags: string[]; attachments: AttachItem[] }>({
+  title: '', description: '', priority: 'medium', status: 'todo', assignee: '', dueDate: '', tags: [], attachments: []
 })
 const formErrors = reactive({ title: '' })
+const editorRef = ref<any>(null)
+const dialogSaved = ref(false)
+
+// Attachment state
+const sessionAttachUrls = new Set<string>()
+const attachInput = ref<HTMLInputElement | null>(null)
+const attachDragover = ref(false)
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + 'B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + 'MB'
+}
+
+async function uploadAttachFile(file: File) {
+  try {
+    const res = await uploadTaskAttachment(file)
+    taskForm.attachments.push({ name: res.name, url: res.url, size: res.size })
+    sessionAttachUrls.add(res.url)
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '上传失败')
+  }
+}
+
+function handleAttachPick(e: Event) {
+  const files = (e.target as HTMLInputElement).files
+  if (!files) return
+  for (const file of files) uploadAttachFile(file)
+}
+
+function handleAttachDrop(e: DragEvent) {
+  attachDragover.value = false
+  const files = e.dataTransfer?.files
+  if (!files) return
+  for (const file of files) uploadAttachFile(file)
+}
+
+function openAttach(url: string) {
+  window.open(url, '_blank')
+}
+
+function removeAttach(idx: number) {
+  const att = taskForm.attachments[idx]
+  if (att?.url) {
+    cleanupTaskImages([att.url]).catch(() => {})
+    sessionAttachUrls.delete(att.url)
+  }
+  taskForm.attachments.splice(idx, 1)
+}
 
 // Tag input
 const tagInputVisible = ref(false)
@@ -489,10 +579,54 @@ function addTag() {
   tagInputVisible.value = false
 }
 
+// Image/Attachment cleanup helpers
+async function cleanupOrphanImages(keepUrls: string[]) {
+  if (!editorRef.value) return
+  const sessionUrls = editorRef.value.getSessionUrls() as string[]
+  const keepSet = new Set(keepUrls)
+  const orphaned = sessionUrls.filter(u => !keepSet.has(u))
+  if (orphaned.length > 0) {
+    try { await cleanupTaskImages(orphaned) } catch {}
+  }
+}
+
+async function cleanupAllSessionImages() {
+  if (!editorRef.value) return
+  const sessionUrls = editorRef.value.getSessionUrls() as string[]
+  if (sessionUrls.length > 0) {
+    try { await cleanupTaskImages(sessionUrls) } catch {}
+  }
+}
+
+async function cleanupOrphanAttachments(keepUrls: string[]) {
+  const orphaned = [...sessionAttachUrls].filter(u => !keepUrls.includes(u))
+  if (orphaned.length > 0) {
+    try { await cleanupTaskImages(orphaned) } catch {}
+  }
+}
+
+async function cleanupAllSessionAttachments() {
+  if (sessionAttachUrls.size > 0) {
+    try { await cleanupTaskImages([...sessionAttachUrls]) } catch {}
+  }
+}
+
+// Watch dialog close for cleanup
+watch(dialogVisible, (val) => {
+  if (!val) {
+    if (!dialogSaved.value) {
+      cleanupAllSessionImages()
+      cleanupAllSessionAttachments()
+    }
+    dialogSaved.value = false
+  }
+})
+
 function openCreate(status: string) {
   editingTask.value = null
   taskForm.title = ''; taskForm.description = ''; taskForm.priority = 'medium'; taskForm.status = status
-  taskForm.assignee = ''; taskForm.dueDate = ''; taskForm.tags = []
+  taskForm.assignee = ''; taskForm.dueDate = ''; taskForm.tags = []; taskForm.attachments = []
+  sessionAttachUrls.clear()
   formErrors.title = ''
   dialogVisible.value = true
 }
@@ -502,6 +636,8 @@ function openEdit(task: Task) {
   taskForm.status = task.status; taskForm.assignee = task.assignee || ''
   taskForm.dueDate = task.due_date ? task.due_date.slice(0, 19) : ''
   taskForm.tags = [...(task.tags || [])]
+  taskForm.attachments = [...(task.attachments || [])]
+  sessionAttachUrls.clear()
   formErrors.title = ''
   dialogVisible.value = true
 }
@@ -509,7 +645,7 @@ async function handleSave() {
   if (!taskForm.title.trim()) { formErrors.title = '标题不能为空'; return }
   saving.value = true
   try {
-    const data: any = { title: taskForm.title, description: taskForm.description, priority: taskForm.priority, due_date: taskForm.dueDate || undefined, assignee: taskForm.assignee, tags: taskForm.tags }
+    const data: any = { title: taskForm.title, description: taskForm.description, priority: taskForm.priority, due_date: taskForm.dueDate || undefined, assignee: taskForm.assignee, tags: taskForm.tags, attachments: taskForm.attachments }
     if (editingTask.value) {
       await store.updateTask(editingTask.value.id, { ...data, status: taskForm.status })
       ElMessage.success('任务已更新')
@@ -517,6 +653,14 @@ async function handleSave() {
       await store.addTask(data)
       ElMessage.success('任务已创建')
     }
+    // Clean up orphaned session images & attachments before closing dialog
+    if (editorRef.value) {
+      const currentUrls = editorRef.value.getCurrentImageUrls() as string[]
+      await cleanupOrphanImages(currentUrls)
+    }
+    const currentAttachUrls = taskForm.attachments.map(a => a.url || '').filter(Boolean)
+    await cleanupOrphanAttachments(currentAttachUrls)
+    dialogSaved.value = true
     dialogVisible.value = false
   } catch { ElMessage.error('操作失败') }
   finally { saving.value = false }
@@ -616,6 +760,33 @@ onMounted(() => store.fetchTasks())</script>
 }
 .task-dialog :deep(.el-button) {
   border-radius: 8px;
+}
+
+/* Attachment drop zone */
+.attach-drop-zone {
+  width: 100%;
+  height: 56px;
+  border: 2px dashed var(--el-border-color);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--el-text-color-placeholder);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--el-fill-color-lighter);
+}
+.attach-drop-zone:hover {
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+.attach-dragover {
+  border-color: var(--el-color-primary) !important;
+  color: var(--el-color-primary) !important;
+  background: var(--el-color-primary-light-9) !important;
 }
 </style>
 

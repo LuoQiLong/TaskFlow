@@ -23,22 +23,36 @@ del _raw_conn, _cursor
 # Create all tables on startup
 Base.metadata.create_all(bind=engine)
 
-# Migrate: add new columns if they don't exist (for existing databases)
-_migrate_conn = pyodbc.connect(_build_conn_str(DB_NAME), autocommit=True)
-_migrate_cur = _migrate_conn.cursor()
-_new_cols = [
+# Helper: add missing columns to existing databases
+def _ensure_columns(table: str, columns: list[tuple[str, str]]):
+    """Try ALTER TABLE ADD for each column; ignore errors if column already exists."""
+    conn = pyodbc.connect(_build_conn_str(DB_NAME), autocommit=True)
+    cur = conn.cursor()
+    for col_name, col_def in columns:
+        try:
+            cur.execute(f"ALTER TABLE [{table}] ADD [{col_name}] {col_def}")
+        except Exception:
+            pass
+    conn.close()
+
+_ensure_columns("users", [
     ("role", "VARCHAR(20) NOT NULL DEFAULT 'member'"),
     ("display_name", "VARCHAR(100) NULL"),
     ("is_active", "BIT NOT NULL DEFAULT 1"),
     ("avatar_url", "VARCHAR(500) NULL"),
-]
-for col_name, col_def in _new_cols:
-    try:
-        _migrate_cur.execute(f"ALTER TABLE users ADD {col_name} {col_def}")
-    except Exception:
-        pass  # column already exists
-_migrate_conn.close()
-del _migrate_conn, _migrate_cur, _new_cols
+])
+_ensure_columns("work_items", [
+    ("attachments", "TEXT NULL"),
+    ("week_end", "DATE NULL"),
+    ("week_hours", "TEXT NULL"),
+    ("completed_weeks", "TEXT NULL"),
+])
+_ensure_columns("milestones", [
+    ("week_start", "DATE NULL"),
+])
+_ensure_columns("tasks", [
+    ("attachments", "TEXT NULL"),
+])
 
 app = FastAPI(
     title="TaskFlow API",
@@ -67,9 +81,13 @@ app.include_router(milestones.router)
 app.include_router(weekly_targets.router)
 app.include_router(admin.router)
 
-# Static files for avatar images
+# Static files for avatar images & work-item uploads
 _static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
 os.makedirs(os.path.join(_static_dir, "avatars"), exist_ok=True)
+os.makedirs(os.path.join(_static_dir, "work-images"), exist_ok=True)
+os.makedirs(os.path.join(_static_dir, "work-attachments"), exist_ok=True)
+os.makedirs(os.path.join(_static_dir, "task-images"), exist_ok=True)
+os.makedirs(os.path.join(_static_dir, "task-attachments"), exist_ok=True)
 app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 

@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
+import os, uuid, re, json
 
 from ..database import get_db
 from ..models.task import Task
@@ -9,6 +10,38 @@ from ..schemas.task import TaskCreate, TaskUpdate, StatusUpdate, ReorderItem, Ta
 from ..middleware.auth import get_current_user, resolve_target_user
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
+
+TASK_IMAGE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "static", "task-images")
+TASK_IMAGE_ALLOWED = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+
+TASK_ATTACH_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "static", "task-attachments")
+TASK_ATTACH_MAX_SIZE = 50 * 1024 * 1024  # 50MB per file
+
+_IMG_RE = re.compile(r'/static/task-images/[^\s"\'<>]+')
+_ATTACH_RE = re.compile(r'/static/task-attachments/[^\s"\'<>]+')
+
+
+def _extract_image_paths(html: str | None) -> set[str]:
+    if not html:
+        return set()
+    return set(_IMG_RE.findall(html))
+
+
+def _extract_attach_paths(attachments_json: str | None) -> set[str]:
+    if not attachments_json:
+        return set()
+    return set(_ATTACH_RE.findall(attachments_json))
+
+
+def _delete_files(paths: set[str]):
+    backend_root = os.path.dirname(os.path.dirname(TASK_IMAGE_DIR))
+    for p in paths:
+        full = os.path.join(backend_root, p.lstrip("/"))
+        try:
+            if os.path.isfile(full):
+                os.remove(full)
+        except OSError:
+            pass
 
 
 def _get_user_task(task_id: int, user_id: int, db: Session) -> Task:
@@ -29,6 +62,70 @@ def _renumber_column_orders(db: Session, user_id: int, status_filter: str):
     )
     for i, t in enumerate(tasks):
         t.column_order = i
+
+
+@router.post("/upload-image")
+async def upload_task_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Upload an image pasted into the task description editor."""
+    ext = os.path.splitext(file.filename or ".png")[1].lower()
+    if ext not in TASK_IMAGE_ALLOWED:
+        raise HTTPException(status_code=400, detail="不支持的图片格式，仅允许 png/jpg/gif/webp/bmp")
+    if ext == ".jpeg":
+        ext = ".jpg"
+
+    contents = await file.read()
+
+    os.makedirs(TASK_IMAGE_DIR, exist_ok=True)
+    filename = f"{current_user.id}_{uuid.uuid4().hex[:12]}{ext}"
+    filepath = os.path.join(TASK_IMAGE_DIR, filename)
+    with open(filepath, "wb") as f:
+        f.write(contents)
+
+    url = f"/static/task-images/{filename}"
+    return {"url": url}
+
+
+@router.post("/upload-attachment")
+async def upload_task_attachment(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Upload a file attachment for a task."""
+    original_name = file.filename or "file"
+    ext = os.path.splitext(original_name)[1].lower()
+    dangerous = {".exe", ".sh", ".bat", ".cmd", ".ps1", ".vbs", ".com", ".msi", ".dll"}
+    if ext in dangerous:
+        raise HTTPException(status_code=400, detail="不支持的文件类型")
+
+    contents = await file.read()
+    if len(contents) > TASK_ATTACH_MAX_SIZE:
+        raise HTTPException(status_code=400, detail="文件大小不能超过 50MB")
+
+    os.makedirs(TASK_ATTACH_DIR, exist_ok=True)
+    safe_name = f"{current_user.id}_{uuid.uuid4().hex[:12]}{ext}"
+    filepath = os.path.join(TASK_ATTACH_DIR, safe_name)
+    with open(filepath, "wb") as f:
+        f.write(contents)
+
+    url = f"/static/task-attachments/{safe_name}"
+    return {"name": original_name, "url": url, "size": len(contents)}
+
+
+@router.post("/images/cleanup")
+def cleanup_task_images(
+    urls: list[str],
+    current_user: User = Depends(get_current_user),
+):
+    """Delete orphaned uploaded images/attachments by URL list."""
+    paths = set()
+    for u in urls:
+        if u.startswith("/static/task-images/") or u.startswith("/static/task-attachments/"):
+            paths.add(u)
+    _delete_files(paths)
+    return {"deleted": len(paths)}
 
 
 @router.get("", response_model=list[TaskResponse])
@@ -134,6 +231,7 @@ def create_task(
         due_date=data.due_date,
         assignee=data.assignee,
         tags=",".join(data.tags) if data.tags else None,
+        attachments=json.dumps([a.model_dump() for a in data.attachments], ensure_ascii=False) if data.attachments else None,
         user_id=current_user.id,
         status="todo",
         column_order=next_order,
@@ -162,12 +260,28 @@ def update_task(
     current_user: User = Depends(get_current_user),
 ):
     task = _get_user_task(task_id, current_user.id, db)
+    old_description = task.description
+    old_attachments = task.attachments
 
     update_data = data.model_dump(exclude_unset=True)
     if "tags" in update_data:
         update_data["tags"] = ",".join(update_data["tags"]) if update_data["tags"] else None
+    if "attachments" in update_data:
+        update_data["attachments"] = json.dumps(update_data["attachments"], ensure_ascii=False)
     for field, value in update_data.items():
         setattr(task, field, value)
+
+    # Delete images removed from description
+    if "description" in update_data:
+        old_paths = _extract_image_paths(old_description)
+        new_paths = _extract_image_paths(task.description)
+        _delete_files(old_paths - new_paths)
+
+    # Delete attachments removed
+    if "attachments" in update_data:
+        old_apaths = _extract_attach_paths(old_attachments)
+        new_apaths = _extract_attach_paths(task.attachments)
+        _delete_files(old_apaths - new_apaths)
 
     db.commit()
     db.refresh(task)
@@ -182,6 +296,11 @@ def delete_task(
 ):
     task = _get_user_task(task_id, current_user.id, db)
     old_status = task.status
+
+    # Clean up uploaded images & attachments
+    _delete_files(_extract_image_paths(task.description))
+    _delete_files(_extract_attach_paths(task.attachments))
+
     db.delete(task)
     db.commit()
 

@@ -81,16 +81,22 @@ def _build_saturation_trend(db: Session, user_id: int | None, weeks: int = 12, r
             .distinct()
             .subquery()
         )
-        planned = (
-            db.query(func.coalesce(func.sum(WorkItem.estimated_hours), 0))
+        # Items with planned hours in this week:
+        # - Non-cross-week: week_start must be within [ws, week_end]
+        # - Cross-week: item's [week_start, week_end] overlaps [ws, week_end]
+        _planned_items = (
+            db.query(WorkItem)
             .filter(
                 *([WorkItem.user_id == user_id] if user_id is not None else []),
-                WorkItem.week_start >= ws,
-                WorkItem.week_start <= week_end,
+                (
+                    ((WorkItem.week_end == None) & (WorkItem.week_start >= ws) & (WorkItem.week_start <= week_end)) |
+                    ((WorkItem.week_end != None) & (WorkItem.week_start <= week_end) & (WorkItem.week_end >= ws))
+                ),
                 ~WorkItem.id.in_(db.query(item_ids_with_logs.c.work_item_id)),
             )
-            .scalar()
-        ) or 0
+            .all()
+        )
+        planned = sum(item.get_hours_for_week(ws) for item in _planned_items)
         total = float(logged) + float(planned)
         target, _ = _get_weekly_target(db, user_id, ws)
         trend.append({
@@ -386,6 +392,7 @@ def get_dashboard_stats(
         .filter(
             WorkItem.user_id == current_user.id,
             WorkItem.end_date.isnot(None),
+            WorkItem.end_date < datetime.now(),
             WorkItem.end_date >= month_start,
             WorkItem.end_date <= month_end,
             WorkItem.status != "done",

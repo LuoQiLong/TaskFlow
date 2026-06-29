@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
@@ -26,6 +27,7 @@ class Task(Base):
     due_date = Column(DateTime, nullable=True)
     assignee = Column(String(100), nullable=True)
     tags = Column(Text, nullable=True)  # comma-separated tags
+    attachments = Column(Text, nullable=True)  # JSON: [{name, url, size}]
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
@@ -50,6 +52,7 @@ class Task(Base):
             "due_date": self.due_date.isoformat() if self.due_date else None,
             "assignee": self.assignee,
             "tags": [t.strip() for t in self.tags.split(",") if t.strip()] if self.tags else [],
+            "attachments": json.loads(self.attachments) if self.attachments else [],
             "user_id": self.user_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

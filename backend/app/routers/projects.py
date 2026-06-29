@@ -72,6 +72,21 @@ def delete_project(
     current_user: User = Depends(get_current_user),
 ):
     project = _get_user_project(project_id, current_user.id, db)
+
+    # Break FK chain: WorkLog.milestone_id → Milestone.id before
+    # cascade reaches Milestones through Project → WorkItem → Milestone.
+    from ..models.work import WorkLog, WorkItem
+    work_item_ids = (
+        db.query(WorkItem.id)
+        .filter(WorkItem.project_id == project_id)
+        .all()
+    )
+    if work_item_ids:
+        item_ids = [r[0] for r in work_item_ids]
+        db.query(WorkLog).filter(WorkLog.work_item_id.in_(item_ids)).update(
+            {WorkLog.milestone_id: None}, synchronize_session="fetch"
+        )
+
     db.delete(project)
     db.commit()
     return {"ok": True}

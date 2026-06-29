@@ -41,16 +41,17 @@ export const useWorkItemStore = defineStore('work-item', () => {
     items.value = items.value.filter(x => x.id !== id)
   }
 
-  async function moveItem(itemId: number, newStatus: string, newOrder: number) {
+  async function moveItem(itemId: number, newStatus: string, newOrder: number, weekStart?: string) {
     const item = items.value.find(x => x.id === itemId)
     if (!item) return
     const oldStatus = item.status
     item.status = newStatus as WorkItem['status']
     item.column_order = newOrder
-    // Trigger reactivity by replacing array reference after in-place mutation
     items.value = [...items.value]
     try {
-      await updateWorkItemStatus(itemId, { status: newStatus, column_order: newOrder })
+      await updateWorkItemStatus(itemId, { status: newStatus, column_order: newOrder, week_start: weekStart })
+      // Refresh to pick up completed_weeks / status adjustments from backend
+      await fetch()
     } catch {
       item.status = oldStatus
       await fetch()

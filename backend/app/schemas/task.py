@@ -3,6 +3,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from .work import AttachmentItem
+
 
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
@@ -11,6 +13,7 @@ class TaskCreate(BaseModel):
     due_date: Optional[datetime] = None
     assignee: Optional[str] = None
     tags: list[str] = []
+    attachments: list[AttachmentItem] = []
 
 
 class TaskUpdate(BaseModel):
@@ -22,6 +25,7 @@ class TaskUpdate(BaseModel):
     due_date: Optional[datetime] = None
     assignee: Optional[str] = None
     tags: Optional[list[str]] = None
+    attachments: Optional[list[AttachmentItem]] = None
 
 
 class StatusUpdate(BaseModel):
@@ -45,6 +49,7 @@ class TaskResponse(BaseModel):
     due_date: Optional[str] = None
     assignee: Optional[str] = None
     tags: list[str] = []
+    attachments: list[AttachmentItem] = []
     user_id: int
     created_at: Optional[str] = None
     updated_at: Optional[str] = None

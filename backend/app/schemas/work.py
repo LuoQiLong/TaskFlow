@@ -4,6 +4,14 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+# ── Attachment ──
+
+class AttachmentItem(BaseModel):
+    name: str
+    url: str
+    size: int  # bytes
+
+
 # ── Project ──
 
 class ProjectCreate(BaseModel):
@@ -40,7 +48,10 @@ class WorkItemCreate(BaseModel):
     estimated_hours: Optional[float] = None
     week_start: date
     is_cross_week: bool = False
+    week_end: Optional[date] = None
+    week_hours: Optional[dict[str, float]] = None  # {"2026-06-22": 5, ...}
     tags: list[str] = []
+    attachments: list[AttachmentItem] = []
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
@@ -56,8 +67,11 @@ class WorkItemUpdate(BaseModel):
     estimated_hours: Optional[float] = None
     week_start: Optional[date] = None
     is_cross_week: Optional[bool] = None
+    week_end: Optional[date] = None
+    week_hours: Optional[dict[str, float]] = None
     tags: Optional[list[str]] = None
     column_order: Optional[int] = None
+    attachments: Optional[list[AttachmentItem]] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
@@ -66,6 +80,7 @@ class WorkItemUpdate(BaseModel):
 class WorkItemStatusUpdate(BaseModel):
     status: str = Field(pattern="^(todo|in_progress|done)$")
     column_order: int = Field(ge=0)
+    week_start: Optional[date] = None  # for cross-week: which week is being completed
 
 
 class WorkItemResponse(BaseModel):
@@ -78,11 +93,16 @@ class WorkItemResponse(BaseModel):
     priority: str
     estimated_hours: Optional[float] = None
     week_start: Optional[date] = None
+    week_end: Optional[date] = None
     is_cross_week: bool
+    week_hours: Optional[dict[str, float]] = None
+    completed_weeks: list[str] = []
+    num_weeks: int = 1
     tags: list[str] = []
     column_order: int
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    attachments: list[AttachmentItem] = []
     due_date: Optional[datetime] = None
     user_id: int
     created_at: Optional[datetime] = None
@@ -129,6 +149,7 @@ class MilestoneCreate(BaseModel):
     description: Optional[str] = Field(default=None, max_length=500)
     hours: Optional[float] = None
     target_date: Optional[date] = None
+    week_start: Optional[date] = None  # for cross-week: which week this manual milestone belongs to
 
 
 class MilestoneUpdate(BaseModel):
@@ -137,6 +158,7 @@ class MilestoneUpdate(BaseModel):
     hours: Optional[float] = None
     target_date: Optional[date] = None
     is_completed: Optional[bool] = None
+    week_start: Optional[date] = None
     sort_order: Optional[int] = None
 
 
@@ -150,6 +172,7 @@ class MilestoneResponse(BaseModel):
     is_completed: bool
     completed_at: Optional[datetime] = None
     is_locked: bool = False
+    week_start: Optional[date] = None
     sort_order: int
     user_id: int
     created_at: Optional[datetime] = None

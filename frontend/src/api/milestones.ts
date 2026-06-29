@@ -10,6 +10,7 @@ export interface Milestone {
   is_completed: boolean
   completed_at: string | null
   is_locked: boolean
+  week_start: string | null  // for cross-week: which week this milestone belongs to
   sort_order: number
   user_id: number
   created_at: string | null
@@ -21,6 +22,7 @@ export interface MilestoneCreate {
   description?: string
   hours?: number
   target_date?: string
+  week_start?: string  // auto-set to current browsing week
 }
 
 export interface MilestoneUpdate {
@@ -29,6 +31,7 @@ export interface MilestoneUpdate {
   hours?: number
   target_date?: string
   is_completed?: boolean
+  week_start?: string
   sort_order?: number
 }
 
