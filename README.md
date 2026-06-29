@@ -6,7 +6,7 @@
 
 | 层 | 技术 |
 |----|------|
-| 前端 | Vue 3 + TypeScript + Vite + Element Plus + Pinia + ECharts |
+| 前端 | Vue 3 + TypeScript + Vite + Element Plus + Pinia + ECharts + Tiptap + xlsx-js-style |
 | 后端 | FastAPI + SQLAlchemy + SQL Server |
 | 认证 | JWT（python-jose）+ bcrypt |
 
@@ -61,36 +61,47 @@ npm run dev
 
 ### 4. 配置说明
 
-后端配置在 `backend/app/config.py`，支持以下环境变量（可选，都有默认值）：
+后端配置在 `backend/app/config.py`，支持以下环境变量。启动时会自动加载 `backend/.env` 文件（如存在），系统环境变量优先级更高。
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `TASKFLOW_SECRET_KEY` | `taskflow-dev-key-change-in-production` | JWT 密钥 |
-| `TASKFLOW_DATABASE_URL` | `mssql+pyodbc:///?odbc_connect=...` | 数据库地址（支持 SQLite / SQL Server） |
+| `TASKFLOW_DB_HOST` | `localhost` | 数据库服务器地址 |
+| `TASKFLOW_DB_PORT` | — | 数据库端口（可选） |
+| `TASKFLOW_DB_USER` | — | 数据库用户名 |
+| `TASKFLOW_DB_PASSWORD` | — | 数据库密码 |
+| `TASKFLOW_DB_NAME` | `taskflow` | 数据库名称 |
+| `TASKFLOW_DB_DRIVER` | `ODBC Driver 17 for SQL Server` | ODBC 驱动 |
 | `TASKFLOW_SMTP_HOST` | `smtp.qq.com` | 邮件服务器 |
 | `TASKFLOW_SMTP_PORT` | `587` | 邮件端口 |
-| `TASKFLOW_SMTP_USER` | — | 发件邮箱 |
+| `TASKFLOW_SMTP_USER` | — | 发件邮箱（不填则邮件功能不可用） |
 | `TASKFLOW_SMTP_PASSWORD` | — | 邮箱授权码 |
+| `TASKFLOW_CORS_ORIGINS` | `localhost:5173` | CORS 来源（逗号分隔） |
 
-可复制 `backend/.env.example` 为 `backend/.env` 自定义配置。
+复制 `backend/.env.example` 为 `backend/.env`，填入实际数据库和邮件配置即可。
 
 ## 功能模块
 
 ### 📋 任务看板
 - 三列拖拽（待处理 → 进行中 → 已完成）
-- 状态/优先级/标签/超期筛选 + 排序
+- **富文本编辑器**：支持加粗/斜体/颜色/表格/图片粘贴上传/待办列表
+- **文件附件**：拖拽/点击上传，文件列表管理
+- 状态/优先级/标签/日期/超期筛选 + 排序
 - 任务创建/编辑/删除/归档
 - 归档任务抽屉（可恢复/永久删除）
 
 ### 📆 工作周报
 - 项目归类管理（支持颜色标记）
 - 任务 + 工单统一管理
+- **富文本编辑器**：支持加粗/斜体/颜色/表格/图片粘贴上传/待办列表
+- **文件附件**：拖拽/点击上传，文件列表管理
 - 周/月视图切换（自定义胶囊按钮）
 - 任务搜索（标题 + 描述模糊搜索）
 - 工时记录与统计
-- 里程碑管理（拖拽排序、🚩进度条）
-- 跨周任务工时拆分
+- 里程碑管理（拖拽排序、🚩进度条、手动/系统锁定）
+- **跨周任务**：自定义每周工时分配、独立完成/撤销、周度列放置
 - 超期预警
+- **Excel 导出**：含样式的工作项导出
 
 ### 👤 用户系统
 - 邮箱注册/登录（JWT + bcrypt）
@@ -132,6 +143,7 @@ TaskFlow/
   frontend/
     src/
       api/                      # Axios 接口封装（10 个模块）
+      components/               # 共享组件（TiptapEditor）
       stores/                   # Pinia 状态管理（5 个 store）
       views/                    # 页面组件（8 个页面）
       layout/AppLayout.vue      # 布局框架
