@@ -6,10 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TaskFlow is a dual-module task management kanban board with Chinese UI.
 
-- **Kanban module** — three-column drag-and-drop task board (todo / in_progress / done) with filtering, archiving, overdue detection, and basic stats
-- **Work Weekly module** — project-based tasks/work-orders with hour tracking, milestones, saturation stats (40h/week default, per-week customizable targets), cross-week splitting, and a dashboard
+- **Kanban module** — three-column drag-and-drop task board (todo / in_progress / done) with filtering, archiving, overdue detection, rich-text description (TiptapEditor), file attachments, and stats
+- **Work Weekly module** — project-based tasks/work-orders with hour tracking, milestones, saturation stats (40h/week default, per-week customizable targets), cross-week splitting, rich-text description, file attachments, and a dashboard
 
-**Stack**: FastAPI + SQLAlchemy + SQL Server / SQLite (backend) / Vue 3 + TypeScript + Vite + Element Plus + Pinia + ECharts (frontend)
+**Stack**: FastAPI + SQLAlchemy + SQL Server / SQLite (backend) / Vue 3 + TypeScript + Vite + Element Plus + Pinia + ECharts + Tiptap (rich text) + xlsx-js-style (frontend)
 
 ## Common Commands
 
@@ -58,8 +58,12 @@ backend/app/
 - All timestamps use `datetime.now()` (Beijing time), NOT UTC
 - `resolve_target_user(current_user, target_user_id)` helper for admin scope switching across all routes
 - User roles: `admin` / `member`; first admin designated manually in database
-- **Startup**: `main.py` auto-creates the SQL Server database (via pyodbc to `master`), then runs `Base.metadata.create_all()` + ad-hoc `ALTER TABLE` migrations for the `users` table columns (`role`, `display_name`, `is_active`, `avatar_url`). No Alembic — migrations are manual.
-- **Static files**: Avatar uploads go to `backend/static/avatars/` (auto-created on startup); FastAPI mounts `/static` and Vite proxies it
+- **Startup**: `main.py` auto-creates the SQL Server database (via pyodbc to `master`), then runs `Base.metadata.create_all()` + ad-hoc `ALTER TABLE` migrations via `_ensure_columns()` helper. No Alembic — migrations are manual. Call `_ensure_columns("table", [("col", "TYPE")])` for new columns.
+- **Static files**: Four upload directories auto-created on startup:
+  - `static/work-images/` + `static/work-attachments/` — Work Weekly module
+  - `static/task-images/` + `static/task-attachments/` — Kanban module
+  - `static/avatars/` — user profile photos
+  FastAPI mounts `/static` and Vite proxies it.
 
 ### Frontend
 
@@ -93,11 +97,11 @@ frontend/src/
 | Table | Purpose |
 |-------|---------|
 | `users` | User accounts (email + bcrypt password, role, display_name, is_active, avatar_url) |
-| `tasks` | Simple kanban tasks (title, status, priority, order, tags) |
+| `tasks` | Kanban tasks (title, description, status, priority, order, tags, attachments JSON, assignee, due_date) |
 | `projects` | Work-weekly projects (name, color) |
-| `work_items` | Unified task/work-order model, `type` field distinguishes |
-| `work_logs` | Hour entries linked to work_items |
-| `milestones` | Milestones linked to work_items (can be locked/system-generated) |
+| `work_items` | Unified task/work-order model, `type` field distinguishes. Cross-week fields: `week_end`, `week_hours` (JSON), `completed_weeks` (JSON). Also has `attachments` JSON |
+| `work_logs` | Hour entries linked to work_items. `is_system` flag for auto-generated logs |
+| `milestones` | Milestones linked to work_items. `is_locked` for system-generated, `week_start` for per-week association |
 | `weekly_targets` | Per-week target hours (default 40h, unique per user+week) |
 
 Full schema: `backend/DATABASE_SCHEMA.md`
@@ -107,10 +111,10 @@ Full schema: `backend/DATABASE_SCHEMA.md`
 | Prefix | Purpose |
 |--------|---------|
 | `/api/auth` | Login, register, get current user, forgot/reset password, avatar upload, profile update |
-| `/api/tasks` | Kanban task CRUD + reorder (supports `target_user_id`, `include_archived`) |
+| `/api/tasks` | Kanban task CRUD + reorder + `upload-image`/`upload-attachment`/`images/cleanup` (supports `target_user_id`, `include_archived`) |
 | `/api/stats` | Kanban overview + 30-day trend (supports `target_user_id`) |
 | `/api/projects` | Project CRUD (user-scoped) |
-| `/api/work-items` | Work item CRUD + status change + tag/week/overdue/search filtering (supports `target_user_id`) |
+| `/api/work-items` | Work item CRUD + status change + `upload-image`/`upload-attachment`/`images/cleanup` + tag/week/overdue/search filtering (supports `target_user_id`) |
 | `/api/work-logs` | Work log CRUD |
 | `/api/work-stats` | Weekly/monthly/trend/dashboard stats (supports `target_user_id` aggregation) |
 | `/api/milestones` | Milestone CRUD + reorder |
@@ -120,16 +124,18 @@ Full schema: `backend/DATABASE_SCHEMA.md`
 
 ## Key Business Rules
 
-1. **Drag to done**: Moving a WorkItem to `done` auto-creates a system WorkLog (`is_system=true`) + locked Milestone
-2. **Drag from done**: Moving out of `done` detaches work_logs from locked milestones, deletes orphan system work_logs, then deletes locked milestones
-3. **Tags**: Stored as comma-separated TEXT in DB, returned as `string[]` by API (both tasks and work_items)
-4. **Work week target**: Default 40 hours/week (`WEEKLY_HOURS = 40` in `work_stats.py`), overridable per-week via `/api/weekly-targets`
-5. **Cross-week**: `WorkItem.is_cross_week` marks items spanning multiple weeks
-6. **Month view**: Uses range query (`week_start_from`/`week_start_to`) with `elif` for exclusive OR against exact `week_start`
+1. **Drag to done**: Moving a WorkItem to `done` auto-creates a system WorkLog (`is_system=true`) + locked Milestone. For cross-week items: only completed_ms_hours from the current week are subtracted (`Milestone.week_start == complete_week`).
+2. **Drag from done**: Moving out of `done` detaches work_logs from locked milestones, deletes orphan system work_logs, then deletes locked milestones. For cross-week: only affects the current browsing week (JOIN with Milestone to only delete logs linked to locked milestones).
+3. **Cross-week details**: `week_hours` JSON `{"2026-06-22":5,"2026-06-29":15}` stores per-week allocation. `completed_weeks` JSON `["2026-06-22"]` tracks which weeks are done. `estimated_hours` auto = sum of week_hours. Frontend `getItemCol()` checks `completed_weeks[ws]` to place item in "done" column only for completed weeks — status stays "done" once any week is complete.
+4. **Tags**: Stored as comma-separated TEXT in DB, returned as `string[]` by API (both tasks and work_items)
+5. **Work week target**: Default 40 hours/week (`WEEKLY_HOURS = 40` in `work_stats.py`), overridable per-week via `/api/weekly-targets`
+6. **Month view**: Uses range query (`week_start_from`/`week_start_to`) with overlap logic (`week_start <= to AND (week_end IS NULL OR week_end >= from)`)
 7. **Admin scope**: `target_user_id` — `0`/`null`=self, `-1`=all users, `>0`=specific user; stats aggregate across all users when `-1`
 8. **Archived tasks**: `status='archived'` excluded from stats/queries by default; `include_archived=true` to show
 9. **Avatar upload**: Canvas-based crop (320×320 crop area, drag to adjust) → 256×256 output, saved to `backend/static/avatars/`
 10. **Password reset**: JWT-based (type: `"password_reset"`, 15min expiry) + QQ SMTP HTML email
+11. **Rich text editor**: Both KanbanView and WorkWeeklyView use `TiptapEditor` component for description fields. It supports image paste/upload (Ctrl+V), tables, headings, colors, task lists, and link insertion. Accepts `uploadUrl` prop to configure the upload endpoint per module.
+12. **File attachments**: Both modules support attachments via drag-and-drop / click-to-upload. Files stored in module-specific directories. Session-level cleanup: orphaned images/attachments from the editing session are deleted when the dialog is cancelled.
 
 ## Notable Patterns
 
@@ -145,6 +151,8 @@ Full schema: `backend/DATABASE_SCHEMA.md`
 - Frontend: Drag reactivity requires `items.value = [...items.value]` after in-place mutation
 - Frontend: Background glows on all authenticated pages via `.app-main { position: relative; z-index }` layers
 - Frontend: `scopeStore` persisted to localStorage, all stores inject `target_user_id` from scope when fetching
+- Frontend: `TiptapEditor` shared component — pass `upload-url` prop to set per-module image upload endpoint (`/tasks/upload-image` vs `/work-items/upload-image`)
+- Frontend: Card descriptions use `stripHtml()` to render plain text from Tiptap HTML — apply when displaying description in cards/lists
 - Pydantic: Field named `date` conflicts with `datetime.date` type — use `log_date` or `target_date` instead
 - TypeScript: `erasableSyntaxOnly` is enabled in `tsconfig.app.json` (TS 6.0 feature) — forbids `enum`, `namespace`, and constructor parameter properties. Use `Record<string, string>` + `const` objects instead of enums (see `types/index.ts` for the established pattern).
 - Auth: Login and Register are separate views with their own routes (`/login`, `/register`), both guarded with `{ guest: true }` meta
