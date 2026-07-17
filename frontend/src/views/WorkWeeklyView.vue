@@ -108,12 +108,14 @@
                 :style="{flex:1,background:col.bg,borderRadius:'12px',padding:'12px',minHeight:'80px',border:'1px solid var(--el-border-color-light)'}"
                 @dragover.prevent @drop="onDrop($event, col.key, group)">
                 <div style="font-size:12px;font-weight:600;color:var(--el-text-color-secondary);margin-bottom:8px;text-align:center">{{ col.label }}</div>
+                <TransitionGroup name="card">
                 <div v-for="(item, idx) in group.items.filter(i => getItemCol(i) === col.key)" :key="item.id"
                   draggable="true"
                   @dragstart="onDragStart($event, item)"
                   @dragover="onDragOver($event, idx)"
                   @dragend="onDragEnd"
                   @click="openEdit(item)"
+                  :class="{ 'is-dragging': dragItemId === item.id }"
                   style="background:var(--el-bg-color);border-radius:10px;padding:12px;margin-bottom:8px;cursor:grab;box-shadow:var(--el-box-shadow-light);transition:all 0.2s;border-left:3px solid"
                   :style="{borderLeftColor: isOverdue(item) ? '#f56c6c' : priorityColor(item.priority), background: isOverdue(item) ? 'var(--el-color-danger-light-9)' : 'var(--el-bg-color)'}">
                   <!-- Type badge -->
@@ -156,6 +158,7 @@
                     </span>
                   </div>
                 </div>
+                </TransitionGroup>
                 <div v-if="group.items.filter(i => getItemCol(i) === col.key).length===0" style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--el-text-color-placeholder);font-size:13px;padding:20px 16px;gap:6px">
                   <span style="font-size:28px;opacity:0.5">{{ col.emptyIcon }}</span>
                   <span>暂无任务</span>
@@ -734,33 +737,43 @@ const projectFilter = ref<number | null>(null)
 const typeFilter = ref('')
 
 function onProjectFilterChange(val: number | '') {
-  store.setFilter('project_id', val || undefined)
+  applyFilter('project_id', val || undefined)
 }
 function onTypeFilterChange(val: string) {
-  store.setFilter('type', val || undefined)
+  applyFilter('type', val || undefined)
 }
 const tagFilter = ref('')
 function onTagFilterChange(val: string) {
-  store.setFilter('tag', val || undefined)
+  applyFilter('tag', val || undefined)
 }
 const allTags = computed(() => {
   const set = new Set<string>()
   store.items.forEach(item => (item.tags || []).forEach(t => set.add(t)))
   return Array.from(set).sort()
 })
-const searchFilter = ref('')
-function onSearchChange() {
-  store.setFilter('search', searchFilter.value || undefined)
-}
-const overdueFilter = ref(false)
-function onOverdueFilterChange(val: boolean) {
-  store.setFilter('overdue', val || undefined)
+// ── Filters with month-view awareness ──
+function applyFilter(key: string, value: any) {
+  if (value === '' || value === null || value === undefined) {
+    delete store.filters[key]
+  } else {
+    (store.filters as any)[key] = value
+  }
+  // Month view: use date-range-aware fetch; week view: standard fetch
+  if (viewMode.value === 'month' && monthRange.value) {
+    fetchMonthItems()
+  } else {
+    store.fetch()
+  }
 }
 
+const searchFilter = ref('')
+function onSearchChange() { applyFilter('search', searchFilter.value || undefined) }
+
+const overdueFilter = ref(false)
+function onOverdueFilterChange(val: boolean) { applyFilter('overdue', val || undefined) }
+
 const priorityFilter = ref('')
-function onPriorityFilterChange(val: string) {
-  store.setFilter('priority', val || undefined)
-}
+function onPriorityFilterChange(val: string) { applyFilter('priority', val || undefined) }
 
 // ── Sort ──
 const sortBy = ref('')
@@ -854,6 +867,9 @@ const filteredItems = computed(() => {
       // Then by priority (high → medium → low)
       return (PRIORITY_ORDER[a.priority] ?? 2) - (PRIORITY_ORDER[b.priority] ?? 2)
     })
+  } else {
+    // Default: sort by column_order
+    list.sort((a, b) => (a.column_order ?? 0) - (b.column_order ?? 0))
   }
 
   return list
@@ -906,29 +922,24 @@ function isOverdue(item: WorkItem): boolean {
 // ── Drag and drop ──
 let draggedItem: WorkItem | null = null
 let dragOverIdx = -1
+const dragItemId = ref<number | null>(null)
 function onDragStart(e: DragEvent, item: WorkItem) {
   draggedItem = item
+  dragItemId.value = item.id
   if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(item.id)) }
 }
 function onDragOver(e: DragEvent, idx: number) { e.preventDefault(); dragOverIdx = idx }
-function onDragEnd() { draggedItem = null; dragOverIdx = -1 }
+function onDragEnd() { draggedItem = null; dragOverIdx = -1; dragItemId.value = null }
 async function onDrop(e: DragEvent, toStatus: string, group: any) {
   if (!draggedItem) return
   const itemId = draggedItem.id
   const targetIdx = dragOverIdx >= 0 ? dragOverIdx : group.items.filter((i: WorkItem) => getItemCol(i) === toStatus).length
   const ws = formatDate(currentWeekStart.value)
-await store.moveItem(itemId, toStatus, targetIdx, ws)
-  // Reload correct dataset based on view mode
-  if (viewMode.value === 'week') {
-    await store.fetch()
-  } else {
-    await fetchMonthItems()
-  }
+  await store.moveItem(itemId, toStatus, targetIdx, ws)
   await store.loadLogs(itemId)
   computeDailyHours()
   await fetchStats()
   await fetchTrend()
-  ElMessage.success('已移动')
 }
 
 // ── Dialog ──
@@ -1466,6 +1477,8 @@ async function removeProject(id: number) {
 }
 
 // ── Month view: fetch all items across the month ──
+const monthRange = ref<{ from: string; to: string } | null>(null)
+
 async function fetchMonthItems() {
   const year = currentMonth.value.year
   const month = currentMonth.value.month
@@ -1473,6 +1486,7 @@ async function fetchMonthItems() {
   const lastDay = new Date(year, month, 0)
   const from = formatDate(getMonday(firstDay))
   const to = formatDate(lastDay)
+  monthRange.value = { from, to }
   // Single range query — no blink
   store.items = await fetchWorkItems({ ...store.filters, week_start_from: from, week_start_to: to, ..._scopeParam() })
 }
@@ -1826,5 +1840,20 @@ onMounted(async () => {
   color: #fff;
   transform: translateY(-1px);
   box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+}
+
+/* ── Drag animations ── */
+.is-dragging {
+  transform: rotate(1.5deg) scale(0.97) !important;
+  opacity: 0.85 !important;
+}
+.card-move {
+  transition: transform 0.25s ease;
+}
+.card-leave-active {
+  display: none;
+}
+.card-enter-active {
+  display: none;
 }
 </style>

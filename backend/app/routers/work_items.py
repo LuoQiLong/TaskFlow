@@ -186,7 +186,9 @@ def list_work_items(
         if _from and _to:
             query = query.filter(
                 WorkItem.week_start <= _to,
-                (WorkItem.week_end == None) | (WorkItem.week_end >= _from)
+                # Single-week item (week_end=None): check week_start in range
+                # Cross-week item: check week_end overlaps from
+                (WorkItem.week_start >= _from) | ((WorkItem.week_end != None) & (WorkItem.week_end >= _from))
             )
     if overdue:
         query = query.filter(

@@ -167,7 +167,7 @@ def get_weekly_stats(
     pending_query = db.query(WorkItem).filter(
         WorkItem.status.in_(["todo", "in_progress"]),
         WorkItem.week_start <= week_end,
-        (WorkItem.week_end == None) | (WorkItem.week_end >= ws),
+        (WorkItem.week_start >= ws) | ((WorkItem.week_end != None) & (WorkItem.week_end >= ws)),
     )
     if eff_user is not None:
         pending_query = pending_query.filter(WorkItem.user_id == eff_user)
@@ -280,12 +280,15 @@ def get_monthly_stats(
         pending_q = db.query(WorkItem).filter(
             WorkItem.status.in_(["todo", "in_progress"]),
             WorkItem.week_start <= last_we,
-            (WorkItem.week_end == None) | (WorkItem.week_end >= first_ws),
+            (WorkItem.week_start >= first_ws) | ((WorkItem.week_end != None) & (WorkItem.week_end >= first_ws)),
         )
         if eff_user is not None:
             pending_q = pending_q.filter(WorkItem.user_id == eff_user)
         for item in pending_q.all():
+            has_wh = item.week_hours is not None
             for ws in month_weeks:
+                if not has_wh and item.week_start != ws:
+                    continue
                 h = item.get_hours_for_week(ws)
                 if h > 0:
                     if item.type == "task":
@@ -478,12 +481,15 @@ def get_dashboard_stats(
     pending_q2 = db.query(WorkItem).filter(
         WorkItem.status.in_(["todo", "in_progress"]),
         WorkItem.week_start <= last_week_end,
-        (WorkItem.week_end == None) | (WorkItem.week_end >= first_ws),
+        (WorkItem.week_start >= first_ws) | ((WorkItem.week_end != None) & (WorkItem.week_end >= first_ws)),
     )
     if eff_user is not None:
         pending_q2 = pending_q2.filter(WorkItem.user_id == eff_user)
     for item in pending_q2.all():
+        has_wh2 = item.week_hours is not None
         for ws in month_weeks:
+            if not has_wh2 and item.week_start != ws:
+                continue
             h = item.get_hours_for_week(ws)
             if h > 0:
                 if item.type == "task":

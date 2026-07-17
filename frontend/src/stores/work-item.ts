@@ -23,6 +23,15 @@ export const useWorkItemStore = defineStore('work-item', () => {
     finally { isLoading.value = false }
   }
 
+  async function refresh() {
+    try {
+      const scope = useScopeStore()
+      const params = { ...filters.value }
+      if (scope.targetUserId !== 0) params.target_user_id = scope.targetUserId
+      items.value = await fetchWorkItems(params)
+    } catch { /* ignore */ }
+  }
+
   async function add(data: WorkItemCreate) {
     const item = await createWorkItem(data)
     items.value.push(item)
@@ -45,13 +54,24 @@ export const useWorkItemStore = defineStore('work-item', () => {
     const item = items.value.find(x => x.id === itemId)
     if (!item) return
     const oldStatus = item.status
+
+    // Optimistic — match KanbanView moveTask pattern
     item.status = newStatus as WorkItem['status']
     item.column_order = newOrder
+    // Reorder source column (excluding moved item)
+    items.value
+      .filter(x => x.status === oldStatus && x.id !== itemId)
+      .sort((a, b) => (a.column_order ?? 0) - (b.column_order ?? 0))
+      .forEach((x, i) => x.column_order = i)
+    // Reorder target column (including moved item)
+    items.value
+      .filter(x => x.status === newStatus)
+      .sort((a, b) => (a.column_order ?? 0) - (b.column_order ?? 0))
+      .forEach((x, i) => x.column_order = i)
     items.value = [...items.value]
+
     try {
       await updateWorkItemStatus(itemId, { status: newStatus, column_order: newOrder, week_start: weekStart })
-      // Refresh to pick up completed_weeks / status adjustments from backend
-      await fetch()
     } catch {
       item.status = oldStatus
       await fetch()
@@ -113,7 +133,7 @@ export const useWorkItemStore = defineStore('work-item', () => {
 
   return {
     items, isLoading, filters,
-    fetch, add, update, remove, moveItem,
+    fetch, refresh, add, update, remove, moveItem,
     setFilter, clearFilters,
     workLogs, loadLogs, addLog, editLog, removeLog, getLogs, getTotalHours,
   }

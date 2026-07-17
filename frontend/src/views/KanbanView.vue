@@ -52,11 +52,13 @@
           </div>
 
           <div style="flex:1;padding:12px 14px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;min-height:100px">
+            <TransitionGroup name="card">
             <div v-for="(task, idx) in colTasks(col.key)" :key="task.id"
               draggable="true"
               @dragstart="onDragStart($event, task, idx, col.key)"
               @dragover="onDragOver($event, idx)"
               @dragend="onDragEnd"
+              :class="{ 'is-dragging': dragItemId === task.id }"
               style="background:var(--el-bg-color);border-radius:14px;padding:16px;cursor:grab;box-shadow:var(--el-box-shadow-light);transition:all 0.2s;border-left:4px solid"
               :style="{ borderLeftColor: priorityColor(task.priority) }"
               @click="openEdit(task)">
@@ -80,6 +82,7 @@
                 <span v-if="task.assignee" style="font-size:12px;color:var(--el-text-color-secondary);margin-left:auto">👤 {{ task.assignee }}</span>
               </div>
             </div>
+            </TransitionGroup>
             <div v-if="colTasks(col.key).length===0" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--el-text-color-placeholder);font-size:13px;padding:24px">
               <span style="font-size:32px;margin-bottom:8px;opacity:0.5">{{ col.emptyIcon }}</span>
               <span>暂无任务</span>
@@ -491,18 +494,18 @@ function stripHtml(html: string | null): string {
 let draggedTask: Task | null = null
 let draggedFrom: string = ''
 let dragOverIdx = -1
+const dragItemId = ref<number | null>(null)
 function onDragStart(e: DragEvent, task: Task, idx: number, col: string) {
   draggedTask = task; draggedFrom = col
+  dragItemId.value = task.id
   if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(task.id)) }
 }
-function onDragEnd() { draggedTask = null; draggedFrom = ''; dragOverIdx = -1 }
+function onDragEnd() { draggedTask = null; draggedFrom = ''; dragOverIdx = -1; dragItemId.value = null }
 function onDragOver(e: DragEvent, idx: number) { e.preventDefault(); dragOverIdx = idx }
 async function onDrop(e: DragEvent, toCol: string) {
   if (!draggedTask) return
   const targetIdx = dragOverIdx >= 0 ? dragOverIdx : colTasks(toCol).length
   await store.moveTask(draggedTask.id, toCol, targetIdx)
-  await store.fetchTasks() // force full reload from server
-  ElMessage.success('任务已移动')
 }
 
 // Dialog
@@ -787,6 +790,21 @@ onMounted(() => store.fetchTasks())</script>
   border-color: var(--el-color-primary) !important;
   color: var(--el-color-primary) !important;
   background: var(--el-color-primary-light-9) !important;
+}
+
+/* ── Drag animations ── */
+.is-dragging {
+  transform: rotate(1.5deg) scale(0.97) !important;
+  opacity: 0.85 !important;
+}
+.card-move {
+  transition: transform 0.25s ease;
+}
+.card-leave-active {
+  display: none;
+}
+.card-enter-active {
+  display: none;
 }
 </style>
 
