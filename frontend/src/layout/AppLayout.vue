@@ -51,12 +51,12 @@
         </el-button>
       </div>
     </el-header>
-    <el-main style="padding:0;background:var(--el-bg-color-page);position:relative;overflow-y:auto">
+    <el-main style="padding:0;background:var(--el-bg-color-page);position:relative;overflow:hidden">
       <!-- 左上角 紫色光晕 -->
       <div style="position:absolute;top:-200px;left:-200px;width:800px;height:800px;border-radius:50%;background:radial-gradient(circle, rgba(139,92,246,0.10) 0%, transparent 60%);pointer-events:none;z-index:0"/>
       <!-- 右下角 蓝色光晕 -->
       <div style="position:absolute;bottom:-180px;right:-180px;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle, rgba(59,130,246,0.10) 0%, transparent 60%);pointer-events:none;z-index:0"/>
-      <div style="position:relative;z-index:1;min-height:calc(100vh - 64px)">
+      <div style="position:relative;z-index:1;min-height:calc(100vh - 64px);overflow-y:auto;height:100%">
         <router-view />
       </div>
     </el-main>

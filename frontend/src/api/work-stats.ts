@@ -11,6 +11,9 @@ export interface WeeklyStats {
   work_order_hours: number
   project_breakdown: { project_id: number; project_name: string; project_color: string; hours: number }[]
   remaining_hours: number
+  available_hours: number
+  pending_task_hours: number
+  pending_work_order_hours: number
 }
 
 export interface TrendPoint {
@@ -32,8 +35,11 @@ export interface MonthlyStats {
   task_hours: number
   work_order_hours: number
   remaining_hours: number
+  available_hours: number
   weekly_breakdown: { week_start: string; total_hours: number; task_hours: number; work_order_hours: number }[]
   project_breakdown: { project_id: number; project_name: string; project_color: string; hours: number }[]
+  pending_task_hours: number
+  pending_work_order_hours: number
 }
 
 export const getWeeklyStats = (weekStart: string, targetUserId?: number) =>
@@ -60,6 +66,7 @@ export interface DashboardSummary {
   work_order_hours: number
   saturation_pct: number
   remaining_hours: number
+  available_hours: number
 }
 
 export interface ProjectHours {
@@ -125,6 +132,8 @@ export interface DashboardStats {
   saturation_trend: SaturationTrendPoint[]
   creation_trend: CreationTrendPoint[]
   weekly_breakdown: WeeklyBreakdownPoint[]
+  pending_task_hours: number
+  pending_work_order_hours: number
 }
 
 export const getDashboardStats = (year: number, month: number, targetUserId?: number) =>

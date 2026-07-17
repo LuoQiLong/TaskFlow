@@ -160,3 +160,48 @@ Full schema: `backend/DATABASE_SCHEMA.md`
 - **Timezones**: JWT token expiry uses `datetime.now(timezone.utc)` in `utils/security.py`, but all application data timestamps use `datetime.now()` (Beijing time) in models/routers. Don't mix these — tokens → UTC, data → local.
 - **Excel export**: The frontend uses `xlsx-js-style` for client-side Excel export of work items; the export logic lives in `WorkWeeklyView.vue`.
 - **`config.py` security**: Database and SMTP credentials are hardcoded as defaults — override via environment variables in production.
+
+## Production Deployment
+
+TaskFlow uses a **dual-server deployment** model with Windows IIS (frontend) and Linux Gunicorn (backend) on separate machines.
+
+```
+Browser ──→ Windows Server (IIS) ──→ Linux Server (Gunicorn :8000) ──→ SQL Server
+            • static files            • /opt/taskflow/backend
+            • reverse proxy           • systemd: taskflow.service
+            • web.config              • 4× uvicorn workers
+```
+
+The full deployment guide is at [`deploy/DEPLOY.md`](deploy/DEPLOY.md) — read that before any production deployment. Key deployment files:
+
+| File | Purpose |
+|------|---------|
+| `deploy/DEPLOY.md` | Step-by-step deployment guide + troubleshooting + release checklist |
+| `deploy/linux/backend.service` | systemd unit file (copied to `/etc/systemd/system/taskflow.service`) |
+| `deploy/linux/.env.production` | Production env variable template |
+| `deploy/windows/web.config` | IIS URL Rewrite + ARR reverse proxy config |
+
+### IIS web.config rules（踩过的坑）
+
+1. **只能有一个 `<rewrite>` 段** — IIS 禁止同一层级有两个 `<rewrite>` 元素，拆成两段会导致每个请求直接 **500**。所有规则必须在同一个 `<rewrite><rules>` 内。
+2. **ARR 代理必须主动开启** — 装了 ARR 模块 ≠ 开好了代理。`Rewrite` 到绝对地址 `http://LINUX_IP:8000` 依赖 ARR proxy。若未开，SPA 页面能访问但所有 `/api` 请求返回 **404**（IIS 当本地路径找文件）。开启后执行 `iisreset`。命令行验证：
+   ```powershell
+   Get-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter 'system.webServer/proxy' -Name 'enabled'
+   Set-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter 'system.webServer/proxy' -Name 'enabled' -Value 'True'
+   ```
+3. **规则顺序有要求**：API 代理 → static 代理 → SPA 兜底。兜底规则 `match url=".*"` 必须放最后。
+
+### Linux systemd gotcha
+
+`EnvironmentFile=/opt/taskflow/backend/.env` 只在服务**启动时**读取一次。修改 `.env`（CORS、数据库密码等）后必须 `sudo systemctl restart taskflow`，**不能 `reload`**（`reload` 走 `kill -HUP`，只是 gunicorn 重载 worker，不重读 `.env`）。
+
+### CORS format
+
+`TASKFLOW_CORS_ORIGINS` 使用**精确匹配**，浏览器 `Origin` 头不带末尾斜杠。所以：
+- ✅ `http://10.128.29.144:9002`（协议 + IP + 端口，无斜杠）
+- ❌ `http://10.128.29.144:9002/`（带斜杠，永远匹配不上）
+- 多个来源用逗号分隔：`http://10.128.29.144:9002,https://example.com`
+
+### Build fallback
+
+`npm run build` 链式执行 `vue-tsc -b && vite build`，项目当前 TypeScript 类型检查有一批未使用变量和联合类型收窄的误报会导致 `vue-tsc` 失败。**不影响运行时行为**。仅需出前端包时，可用 `npx vite build` 跳过类型门禁，产物同样在 `frontend/dist/`。

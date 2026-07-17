@@ -186,6 +186,7 @@
             </template>
           </div>
           <div v-if="currentStats?.is_custom_target && (currentStats?.weekly_target || currentStats?.monthly_target || 40) !== 40" style="font-size:10px;color:#e6a23c;margin-top:2px">📝 自定义目标</div>
+          <div v-if="currentNotes" style="font-size:11px;color:var(--el-text-color-secondary);margin-top:4px;max-width:260px;margin-left:auto;margin-right:auto;line-height:1.4">💬 {{ currentNotes }}</div>
           <el-button text size="small" type="primary" style="margin-top:4px" @click="openTargetDialog">⚙️ 设置目标</el-button>
         </el-card>
 
@@ -212,6 +213,10 @@
               <el-button size="small" @click="targetFormHours = 32" :type="targetFormHours === 32 ? 'primary' : ''">32h</el-button>
             </div>
           </div>
+          <div style="margin-top:14px;text-align:left">
+            <div style="font-size:13px;color:var(--el-text-color-secondary);margin-bottom:6px">备注原因（选填）</div>
+            <el-input v-model="targetFormNotes" type="textarea" :rows="2" placeholder="如：请假三天、出差" maxlength="200" show-word-limit />
+          </div>
           <template #footer>
             <el-button @click="targetDialogVisible = false">取消</el-button>
             <el-button v-if="currentStats?.is_custom_target && (currentStats?.weekly_target || currentStats?.monthly_target || 40) !== 40" type="danger" plain @click="resetTarget">恢复默认</el-button>
@@ -219,23 +224,48 @@
           </template>
         </el-dialog>
 
-        <!-- Task vs Work Order -->
-        <el-row :gutter="10" style="margin-bottom:14px">
+        <!-- Completed hours row -->
+        <el-row :gutter="8" style="margin-bottom:8px">
           <el-col :span="12">
-            <el-card shadow="hover" :body-style="{ padding:'16px', textAlign:'center' }"
-              style="background:var(--el-color-primary-light-9);border:none;border-radius:12px">
-              <div style="font-size:24px;font-weight:800;color:var(--el-color-primary)">{{ currentStats?.task_hours || 0 }}h</div>
-              <div style="font-size:12px;color:var(--el-color-primary);margin-top:2px;font-weight:600">📋 任务工时</div>
+            <el-card shadow="hover" :body-style="{ padding:'12px', textAlign:'center' }"
+              style="background:var(--el-color-primary-light-9);border:none;border-radius:10px">
+              <div style="font-size:20px;font-weight:800;color:var(--el-color-primary)">{{ currentStats?.task_hours || 0 }}h</div>
+              <div style="font-size:11px;color:var(--el-color-primary);margin-top:1px;font-weight:600">✅ 已完成任务</div>
             </el-card>
           </el-col>
           <el-col :span="12">
-            <el-card shadow="hover" :body-style="{ padding:'16px', textAlign:'center' }"
-              style="background:#fdf6ec;border:none;border-radius:12px">
-              <div style="font-size:24px;font-weight:800;color:#e6a23c">{{ currentStats?.work_order_hours || 0 }}h</div>
-              <div style="font-size:12px;color:#e6a23c;margin-top:2px;font-weight:600">🔧 工单工时</div>
+            <el-card shadow="hover" :body-style="{ padding:'12px', textAlign:'center' }"
+              style="background:#fdf6ec;border:none;border-radius:10px">
+              <div style="font-size:20px;font-weight:800;color:#e6a23c">{{ currentStats?.work_order_hours || 0 }}h</div>
+              <div style="font-size:11px;color:#e6a23c;margin-top:1px;font-weight:600">✅ 已完成工单</div>
             </el-card>
           </el-col>
         </el-row>
+
+        <!-- Pending hours row -->
+        <el-row :gutter="8" style="margin-bottom:8px">
+          <el-col :span="12">
+            <el-card shadow="hover" :body-style="{ padding:'12px', textAlign:'center' }"
+              style="background:#e8f4fd;border:none;border-radius:10px">
+              <div style="font-size:20px;font-weight:800;color:#409eff">{{ currentStats?.pending_task_hours || 0 }}h</div>
+              <div style="font-size:11px;color:#409eff;margin-top:1px;font-weight:600">⏳ 待处理任务</div>
+            </el-card>
+          </el-col>
+          <el-col :span="12">
+            <el-card shadow="hover" :body-style="{ padding:'12px', textAlign:'center' }"
+              style="background:#fef0f0;border:none;border-radius:10px">
+              <div style="font-size:20px;font-weight:800;color:#f56c6c">{{ currentStats?.pending_work_order_hours || 0 }}h</div>
+              <div style="font-size:11px;color:#f56c6c;margin-top:1px;font-weight:600">📦 待处理工单</div>
+            </el-card>
+          </el-col>
+        </el-row>
+
+        <!-- Remaining / Over -->
+        <el-card shadow="hover" :body-style="{ padding:'12px', textAlign:'center' }"
+          :style="{ background: (currentStats?.available_hours ?? 0) >= 0 ? '#f0f9eb' : '#fef0f0', border:'none', borderRadius:'10px', marginBottom:'14px' }">
+          <div :style="{ fontSize:'20px', fontWeight:800, color: (currentStats?.available_hours ?? 0) >= 0 ? '#67c23a' : '#f56c6c' }">{{ Math.abs(currentStats?.available_hours || 0) }}h</div>
+          <div :style="{ fontSize:'11px', color: (currentStats?.available_hours ?? 0) >= 0 ? '#67c23a' : '#f56c6c', marginTop:'1px', fontWeight:600 }">{{ (currentStats?.available_hours ?? 0) >= 0 ? '🎯 剩余可投入' : '⚡ 预计超出' }}</div>
+        </el-card>
 
         <!-- Project breakdown bar chart -->
         <el-card v-if="(currentStats?.project_breakdown||[]).length" shadow="never" style="border-radius:12px;margin-bottom:14px">
@@ -1454,8 +1484,19 @@ const trendData = ref<TrendPoint[]>([])
 async function fetchStats() {
   if (viewMode.value === 'week') {
     currentStats.value = await getWeeklyStats(formatDate(currentWeekStart.value), _scopeVal())
+    // Also fetch notes for the current week
+    try {
+      const t = await getWeeklyTarget(formatDate(currentWeekStart.value))
+      currentNotes.value = t.notes || ''
+    } catch { currentNotes.value = '' }
   } else {
     currentStats.value = await getMonthlyStats(currentMonth.value.year, currentMonth.value.month, _scopeVal())
+    // Fetch notes for the first week of the month
+    try {
+      const ws = formatDate(getMonday(new Date(currentMonth.value.year, currentMonth.value.month - 1, 1)))
+      const t = await getWeeklyTarget(ws)
+      currentNotes.value = t.notes || ''
+    } catch { currentNotes.value = '' }
   }
 }
 async function fetchTrend() { trendData.value = await getTrendStats(12, _scopeVal()) }
@@ -1487,9 +1528,12 @@ function handleExport() {
 // ── Custom target ──
 const targetDialogVisible = ref(false)
 const targetFormHours = ref(40)
+const targetFormNotes = ref('')
+const currentNotes = ref('')
 
 function openTargetDialog() {
   targetFormHours.value = currentStats.value?.weekly_target || currentStats.value?.monthly_target || 40
+  targetFormNotes.value = currentNotes.value || ''
   targetDialogVisible.value = true
 }
 
@@ -1497,14 +1541,14 @@ async function saveTarget() {
   try {
     if (viewMode.value === 'week') {
       const ws = formatDate(currentWeekStart.value)
-      await setWeeklyTarget(ws, targetFormHours.value)
+      await setWeeklyTarget(ws, targetFormHours.value, targetFormNotes.value || undefined)
       ElMessage.success(`已设置目标为 ${targetFormHours.value}h`)
     } else {
       const y = currentMonth.value.year, m = currentMonth.value.month
       let d = getMonday(new Date(y, m - 1, 1))
       const lastDay = new Date(y, m, 0)
       while (d <= lastDay) {
-        await setWeeklyTarget(formatDate(d), targetFormHours.value)
+        await setWeeklyTarget(formatDate(d), targetFormHours.value, targetFormNotes.value || undefined)
         d = new Date(d.getTime() + 7 * 86400000)
       }
       ElMessage.success(`已设置目标为 ${targetFormHours.value}h`)
@@ -1517,7 +1561,7 @@ async function saveTarget() {
 async function resetTarget() {
   try {
     if (viewMode.value === 'week') {
-      await setWeeklyTarget(formatDate(currentWeekStart.value), 40)
+      await setWeeklyTarget(formatDate(currentWeekStart.value), 40, '')
       ElMessage.success('已恢复默认 40h')
     }
     targetDialogVisible.value = false
